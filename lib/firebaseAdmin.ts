@@ -36,7 +36,16 @@ if (!getApps().length) {
     }
   } catch (error: any) {
     console.error('Firebase Admin Initialization Error:', error);
-    // Do not throw here to allow the app to start, but API calls will fail
+    // Ensure we initialize a default app even if credentials fail,
+    // so that admin.auth() and admin.firestore() calls below don't crash the build immediately.
+    // Use try-catch here just in case customized logic fails again.
+    try {
+      if (!getApps().length) {
+        admin.initializeApp();
+      }
+    } catch (e) {
+      console.error('Failed to initialize fallback Firebase Admin app', e);
+    }
   }
 }
 
