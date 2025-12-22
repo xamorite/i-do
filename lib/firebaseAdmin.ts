@@ -9,9 +9,20 @@ if (!getApps().length) {
 
     if (serviceAccountJson) {
       console.log('Initialize Firebase Admin with FIREBASE_SERVICE_ACCOUNT variable');
-      // Netlify/Vercel often mess up newlines in env vars, so we fix them manually
+      let sanitizedJson = serviceAccountJson;
+      // Check if base64 encoded (starts with '{' in base64 is 'ew')
+      if (!serviceAccountJson.trim().startsWith('{')) {
+        try {
+          sanitizedJson = Buffer.from(serviceAccountJson, 'base64').toString('utf8');
+          console.log('Detected and decoded Base64 service account');
+        } catch (e) {
+          // ignore, assume raw json
+        }
+      }
+
+      // Netlify/Vercel often mess up newlines in raw env vars, so we fix them manually
       // We check if it contains actual newline characters or literal "\n" string
-      const sanitizedJson = serviceAccountJson.replace(/\\n/g, '\n');
+      sanitizedJson = sanitizedJson.replace(/\\n/g, '\n');
       const serviceAccount = JSON.parse(sanitizedJson);
 
       admin.initializeApp({
