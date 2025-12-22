@@ -13,7 +13,11 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center">
-            <Calendar className="text-purple-600" size={48} />
+            <img
+              src="https://img.icons8.com/nolan/64/reminders.png"
+              alt="Task Manager Logo"
+              className="w-16 h-16 object-contain"
+            />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
             {isSignUp ? 'Create your account' : 'Sign in to your account'}
