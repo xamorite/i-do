@@ -5,8 +5,20 @@ import { LoginForm } from '@/components/auth/LoginForm';
 import { SignUpForm } from '@/components/auth/SignUpForm';
 import { Calendar } from 'lucide-react';
 
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+
 export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  // Explicitly handle redirect at the top level
+  React.useEffect(() => {
+    if (!loading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, loading, router]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
