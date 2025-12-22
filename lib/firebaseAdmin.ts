@@ -9,7 +9,11 @@ if (!getApps().length) {
 
     if (serviceAccountJson) {
       console.log('Initialize Firebase Admin with FIREBASE_SERVICE_ACCOUNT variable');
-      const serviceAccount = JSON.parse(serviceAccountJson);
+      // Netlify/Vercel often mess up newlines in env vars, so we fix them manually
+      // We check if it contains actual newline characters or literal "\n" string
+      const sanitizedJson = serviceAccountJson.replace(/\\n/g, '\n');
+      const serviceAccount = JSON.parse(sanitizedJson);
+
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
       });
