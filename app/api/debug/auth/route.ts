@@ -18,7 +18,7 @@ export async function GET() {
         if (app) {
             adminStatus = 'Initialized';
             try {
-                projectId = app.options.credential?.getProjectId() || 'Unknown (Available)'; // getProjectId might throw if not cert credential
+                projectId = (app.options.credential as any)?.getProjectId() || 'Unknown (Available)'; // Cast to any to access getProjectId
             } catch (e) {
                 projectId = 'Error getting project ID';
             }
