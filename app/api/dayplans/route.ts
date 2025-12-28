@@ -14,65 +14,126 @@ async function verifyToken(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const uid = await verifyToken(request);
-  if (!uid) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 });
+  try {
+    const uid = await verifyToken(request);
+    if (!uid) {
+      return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-  const { searchParams } = new URL(request.url);
-  const date = searchParams.get('date');
+    const { searchParams } = new URL(request.url);
+    const date = searchParams.get('date');
 
-  if (!date) {
-    return new Response(JSON.stringify({ ok: false, error: 'Date is required' }), { status: 400 });
+    if (!date) {
+      return new Response(JSON.stringify({ ok: false, error: 'Date is required' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const q = adminDb.collection('dayplans')
+      .where('userId', '==', uid)
+      .where('date', '==', date)
+      .limit(1);
+
+    const snap = await q.get();
+    if (snap.empty) {
+      return new Response(JSON.stringify({ ok: true, dayPlan: null }), { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const doc = snap.docs[0];
+    return new Response(JSON.stringify({ ok: true, dayPlan: { id: doc.id, ...doc.data() } }), { 
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error: any) {
+    console.error('[GET /api/dayplans] Error:', error);
+    return new Response(JSON.stringify({ ok: false, error: 'Internal server error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
-
-  const q = adminDb.collection('dayplans')
-    .where('userId', '==', uid)
-    .where('date', '==', date)
-    .limit(1);
-
-  const snap = await q.get();
-  if (snap.empty) {
-    return new Response(JSON.stringify({ ok: true, dayPlan: null }), { status: 200 });
-  }
-
-  const doc = snap.docs[0];
-  return new Response(JSON.stringify({ ok: true, dayPlan: { id: doc.id, ...doc.data() } }), { status: 200 });
 }
 
 export async function POST(request: Request) {
-  const uid = await verifyToken(request);
-  if (!uid) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 });
+  try {
+    const uid = await verifyToken(request);
+    if (!uid) {
+      return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-  const body = await request.json().catch(() => ({}));
-  if (!body.date || !body.taskIds) {
-    return new Response(JSON.stringify({ ok: false, error: 'Date and taskIds are required' }), { status: 400 });
-  }
+    let body;
+    try {
+      body = await request.json();
+    } catch (err) {
+      return new Response(JSON.stringify({ ok: false, error: 'Invalid JSON body' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-  // Check if dayplan already exists
-  const existingQ = adminDb.collection('dayplans')
-    .where('userId', '==', uid)
-    .where('date', '==', body.date)
-    .limit(1);
-  const existingSnap = await existingQ.get();
+    if (!body.date || !body.taskIds) {
+      return new Response(JSON.stringify({ ok: false, error: 'Date and taskIds are required' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-  if (!existingSnap.empty) {
-    const docId = existingSnap.docs[0].id;
-    await adminDb.collection('dayplans').doc(docId).update({
+    // Validate taskIds is an array
+    if (!Array.isArray(body.taskIds)) {
+      return new Response(JSON.stringify({ ok: false, error: 'taskIds must be an array' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Check if dayplan already exists
+    const existingQ = adminDb.collection('dayplans')
+      .where('userId', '==', uid)
+      .where('date', '==', body.date)
+      .limit(1);
+    const existingSnap = await existingQ.get();
+
+    if (!existingSnap.empty) {
+      const docId = existingSnap.docs[0].id;
+      await adminDb.collection('dayplans').doc(docId).update({
+        taskIds: body.taskIds,
+        totalPlannedMinutes: body.totalPlannedMinutes || 0,
+        updatedAt: new Date().toISOString()
+      });
+      return new Response(JSON.stringify({ ok: true, id: docId }), { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const newDayPlan = {
+      userId: uid,
+      date: body.date,
       taskIds: body.taskIds,
       totalPlannedMinutes: body.totalPlannedMinutes || 0,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
+    };
+
+    const ref = await adminDb.collection('dayplans').add(newDayPlan);
+    return new Response(JSON.stringify({ ok: true, id: ref.id }), { 
+      status: 201,
+      headers: { 'Content-Type': 'application/json' }
     });
-    return new Response(JSON.stringify({ ok: true, id: docId }), { status: 200 });
+  } catch (error: any) {
+    console.error('[POST /api/dayplans] Error:', error);
+    return new Response(JSON.stringify({ ok: false, error: 'Internal server error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
-
-  const newDayPlan = {
-    userId: uid,
-    date: body.date,
-    taskIds: body.taskIds,
-    totalPlannedMinutes: body.totalPlannedMinutes || 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  const ref = await adminDb.collection('dayplans').add(newDayPlan);
-  return new Response(JSON.stringify({ ok: true, id: ref.id }), { status: 201 });
 }

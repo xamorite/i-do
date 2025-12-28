@@ -1,10 +1,17 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 
 async function exchangeCodeForTokens(code: string, redirectUri: string) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Google OAuth credentials are not configured');
+  }
+
   const params = new URLSearchParams();
   params.append('code', code);
-  params.append('client_id', process.env.GOOGLE_CLIENT_ID || '');
-  params.append('client_secret', process.env.GOOGLE_CLIENT_SECRET || '');
+  params.append('client_id', clientId);
+  params.append('client_secret', clientSecret);
   params.append('redirect_uri', redirectUri);
   params.append('grant_type', 'authorization_code');
 
@@ -84,6 +91,24 @@ export async function GET(request: Request) {
     `;
     return new Response(html, { status: 200, headers: { 'content-type': 'text/html' } });
   } catch (err: any) {
-    return new Response(`Error completing OAuth: ${err.message || err}`, { status: 500 });
+    console.error('[Google OAuth Callback] Error:', err);
+    const errorMessage = err.message || 'An error occurred during OAuth';
+    const errorHtml = `
+      <!doctype html>
+      <html>
+        <head>
+          <title>Connection Error</title>
+          <style>body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fafafa; color: #333; }</style>
+        </head>
+        <body>
+          <div style="text-align: center">
+            <h1 style="color: #dc2626;">Connection Failed</h1>
+            <p>${errorMessage}</p>
+            <button onclick="window.close()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #333; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Close</button>
+          </div>
+        </body>
+      </html>
+    `;
+    return new Response(errorHtml, { status: 500, headers: { 'content-type': 'text/html' } });
   }
 }

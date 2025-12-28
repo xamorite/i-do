@@ -17,7 +17,10 @@ export async function GET(request: Request) {
     const uid = await verifyToken(request);
     if (!uid) {
       console.warn('API GET /api/integrations: Unauthorized access attempt');
-      return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 });
+      return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Simplification: Remove orderBy to avoid needing a composite index immediately.
@@ -27,52 +30,112 @@ export async function GET(request: Request) {
     const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
     // Sort by connectedAt desc
     items.sort((a: any, b: any) => (b.connectedAt || '').localeCompare(a.connectedAt || ''));
-    return new Response(JSON.stringify({ ok: true, integrations: items }), { status: 200 });
+    return new Response(JSON.stringify({ ok: true, integrations: items }), { 
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (error: any) {
     console.error('API Error GET /api/integrations:', error);
-    return new Response(JSON.stringify({ ok: false, error: 'Internal Server Error' }), { status: 500 });
+    return new Response(JSON.stringify({ ok: false, error: 'Internal Server Error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
 export async function POST(request: Request) {
-  const uid = await verifyToken(request);
-  if (!uid) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 });
+  try {
+    const uid = await verifyToken(request);
+    if (!uid) {
+      return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-  const body = await request.json().catch(() => ({}));
-  const now = new Date().toISOString();
-  const payload = { userId: uid, service: body.service || 'unknown', config: body.config || {}, connectedAt: now };
-  const ref = await adminDb.collection('integrations').add(payload as any);
-  const doc = await ref.get();
-  return new Response(JSON.stringify({ ok: true, integration: { id: doc.id, ...(doc.data() as any) } }), { status: 201 });
+    let body;
+    try {
+      body = await request.json();
+    } catch (err) {
+      return new Response(JSON.stringify({ ok: false, error: 'Invalid JSON body' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!body.service || typeof body.service !== 'string') {
+      return new Response(JSON.stringify({ ok: false, error: 'Service is required' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const now = new Date().toISOString();
+    const payload = { 
+      userId: uid, 
+      service: body.service, 
+      config: body.config || {}, 
+      connectedAt: now 
+    };
+    const ref = await adminDb.collection('integrations').add(payload as any);
+    const doc = await ref.get();
+    return new Response(JSON.stringify({ ok: true, integration: { id: doc.id, ...(doc.data() as any) } }), { 
+      status: 201,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error: any) {
+    console.error('[POST /api/integrations] Error:', error);
+    return new Response(JSON.stringify({ ok: false, error: 'Internal Server Error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
 
 export async function DELETE(request: Request) {
   try {
     const uid = await verifyToken(request);
-    if (!uid) return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 });
+    if (!uid) {
+      return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
-      return new Response(JSON.stringify({ ok: false, error: 'Missing ID' }), { status: 400 });
+      return new Response(JSON.stringify({ ok: false, error: 'Missing ID' }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const docRef = adminDb.collection('integrations').doc(id);
     const doc = await docRef.get();
 
     if (!doc.exists) {
-      return new Response(JSON.stringify({ ok: false, error: 'Not found' }), { status: 404 });
+      return new Response(JSON.stringify({ ok: false, error: 'Not found' }), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (doc.data()?.userId !== uid) {
-      return new Response(JSON.stringify({ ok: false, error: 'Forbidden' }), { status: 403 });
+      return new Response(JSON.stringify({ ok: false, error: 'Forbidden' }), { 
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     await docRef.delete();
     return new Response(null, { status: 204 });
   } catch (error: any) {
     console.error('API Error DELETE /api/integrations:', error);
-    return new Response(JSON.stringify({ ok: false, error: 'Internal Server Error' }), { status: 500 });
+    return new Response(JSON.stringify({ ok: false, error: 'Internal Server Error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
