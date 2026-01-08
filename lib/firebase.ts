@@ -16,7 +16,7 @@ const firebaseConfig = {
 if (typeof window !== 'undefined') {
   const requiredFields: Array<keyof typeof firebaseConfig> = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
   const missingFields = requiredFields.filter(field => !firebaseConfig[field]);
-  
+
   if (missingFields.length > 0) {
     const envVarMap: Record<string, string> = {
       apiKey: 'NEXT_PUBLIC_FIREBASE_API_KEY',
@@ -26,7 +26,7 @@ if (typeof window !== 'undefined') {
       messagingSenderId: 'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
       appId: 'NEXT_PUBLIC_FIREBASE_APP_ID',
     };
-    
+
     console.error(
       'Firebase configuration is missing required fields:',
       missingFields.join(', '),
@@ -52,6 +52,20 @@ if (getApps().length === 0) {
 // Initialize Firebase services
 export const auth: Auth = getAuth(app);
 export const db: Firestore = getFirestore(app);
+
+// Enable offline persistence for instant loading
+if (typeof window !== 'undefined') {
+  import('firebase/firestore').then(({ enableIndexedDbPersistence }) => {
+    enableIndexedDbPersistence(db).catch((err) => {
+      if (err.code === 'failed-precondition') {
+        console.warn('Firestore persistence failed: Multiple tabs open');
+      } else if (err.code === 'unimplemented') {
+        console.warn('Firestore persistence not supported in this browser');
+      }
+    });
+  });
+}
+
 export default app;
 
 

@@ -169,3 +169,6 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
     </div>
   );
 };
+
+// Memoize to prevent re-rendering entire list when one task changes
+export default React.memo(TaskCard);
