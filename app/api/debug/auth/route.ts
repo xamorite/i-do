@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import admin from '@/lib/firebaseAdmin';
 import { getApps } from 'firebase-admin/app';
 
+// Force dynamic rendering to prevent build-time execution
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET() {
     try {
         const apps = getApps();

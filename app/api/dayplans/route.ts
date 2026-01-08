@@ -1,6 +1,10 @@
 import { adminAuth, adminDb } from '../../../lib/firebaseAdmin';
 import type { DayPlan } from '../../../lib/types';
 
+// Force dynamic rendering to prevent build-time execution
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 async function verifyToken(request: Request) {
   const authHeader = request.headers.get('authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;

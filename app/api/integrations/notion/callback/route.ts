@@ -1,6 +1,10 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { encryptText } from '@/lib/kms';
 
+// Force dynamic rendering to prevent build-time execution
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 async function exchangeCodeForTokens(code: string, redirectUri: string) {
     const clientId = process.env.NOTION_CLIENT_ID || '';
     const clientSecret = process.env.NOTION_CLIENT_SECRET || '';
