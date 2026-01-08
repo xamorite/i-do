@@ -7,6 +7,13 @@ export async function fetchTasks(filter = '') {
   return res.json();
 }
 
+export async function fetchTaskById(id: string) {
+  const headers = await getIdTokenHeader() as HeadersInit;
+  const res = await fetch(`/api/tasks/${id}`, { headers });
+  if (!res.ok) throw new Error('Failed to fetch task');
+  return res.json();
+}
+
 export async function createTask(payload: any) {
   const tokenHeader = await getIdTokenHeader() as Record<string, string>;
   const res = await fetch('/api/tasks', { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json', ...tokenHeader } });

@@ -6,6 +6,7 @@ export interface User {
   uid: string;
   email: string | null;
   displayName: string | null;
+  username?: string; // Unique username for @mentions
   role: UserRole;
   createdAt?: Date;
 }
@@ -62,7 +63,24 @@ export interface Task {
   plannedDate?: string | null;
   estimateMinutes?: number | null;
   actualMinutes?: number | null;
-  status: 'inbox' | 'backlog' | 'planned' | 'done';
+  // Accountability fields
+  userId?: string; // Database field for owner (for backward compatibility / indexing)
+  ownerId?: string; // The user responsible for doing the work
+  createdBy?: string; // The user who created the task
+  accountabilityPartnerId?: string; // The user who verifies completion
+  rejectionReason?: string;
+
+  status:
+  | 'inbox'
+  | 'backlog'
+  | 'draft'              // Draft task, not yet active
+  | 'planned'
+  | 'done'
+  | 'pending_acceptance' // Delegated task waiting for owner acceptance
+  | 'awaiting_approval'  // Owner believes it's done, waiting for AP
+  | 'rejected'           // Owner rejected delegation
+  | 'blocked';           // General blocked state
+
   isTimeboxed?: boolean;
   startTime?: string | null;
   endTime?: string | null;
@@ -74,6 +92,37 @@ export interface Task {
   recurrencePattern?: string; // cron-like pattern or simple "daily", "weekly", etc.
   createdAt?: string;
   updatedAt?: string;
+  sharedWith?: SharedUser[];
+}
+
+export type PartnerStatus = 'pending' | 'active' | 'declined' | 'blocked';
+
+export interface PartnerRelationship {
+  id: string;
+  requesterId: string;
+  recipientId: string;
+  status: PartnerStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ShareRole = 'viewer' | 'commenter' | 'accountability_partner';
+
+export interface SharedUser {
+  userId: string;
+  role: ShareRole;
+  addedAt: string;
+}
+
+export interface Notification {
+  id: string;
+  recipientId: string;
+  senderId: string;
+  type: 'task_assigned' | 'task_accepted' | 'task_rejected' | 'task_submitted' | 'task_approved' | 'task_changes_requested';
+  taskId: string;
+  taskTitle: string;
+  read: boolean;
+  createdAt: string;
 }
 
 // Planner-specific types

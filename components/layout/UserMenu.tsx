@@ -3,10 +3,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { LogOut, Settings, Plus, User as UserIcon } from 'lucide-react';
+import { LogOut, Settings, Plus, User as UserIcon, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 
-export const UserMenu: React.FC = () => {
+interface UserMenuProps {
+    onOpenPartners?: () => void;
+}
+
+export const UserMenu: React.FC<UserMenuProps> = ({ onOpenPartners }) => {
     const { user, signOut } = useAuth();
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
@@ -73,6 +77,17 @@ export const UserMenu: React.FC = () => {
                         >
                             <Settings size={16} className="text-gray-400 group-hover:text-purple-500" />
                             <span className="font-semibold">Settings</span>
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                if (onOpenPartners) onOpenPartners();
+                                setIsOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/10 hover:text-purple-600 rounded-lg transition-colors group"
+                        >
+                            <ShieldCheck size={16} className="text-gray-400 group-hover:text-purple-500" />
+                            <span className="font-semibold">Partners</span>
                         </button>
 
                         <button

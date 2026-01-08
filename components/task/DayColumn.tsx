@@ -17,6 +17,8 @@ interface DayColumnProps {
     onReorder: (newTasks: Task[]) => void;
     onTaskClick: (task: Task) => void;
     onStatusToggle: (task: Task) => void;
+    currentUserId?: string;
+    onAction?: (task: Task, action: string) => void;
 }
 
 export const DayColumn: React.FC<DayColumnProps> = ({
@@ -26,7 +28,9 @@ export const DayColumn: React.FC<DayColumnProps> = ({
     onAddTask,
     onReorder,
     onTaskClick,
-    onStatusToggle
+    onStatusToggle,
+    currentUserId,
+    onAction
 }) => {
     const { setNodeRef, isOver } = useDroppable({
         id: `column-${date.toISOString().split('T')[0]}`,
@@ -52,7 +56,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
     );
 
     return (
-        <div ref={setNodeRef} className={`flex flex-col w-80 h-full bg-white dark:bg-neutral-900 border-r border-gray-100 dark:border-neutral-800 transition-colors ${isOver ? 'bg-purple-50/50 dark:bg-purple-900/5' : ''}`}>
+        <div ref={setNodeRef} className={`flex flex-col w-full min-w-[300px] lg:w-80 flex-shrink-0 h-full bg-white dark:bg-neutral-900 border-r border-gray-100 dark:border-neutral-800 transition-colors ${isOver ? 'bg-purple-50/50 dark:bg-purple-900/5' : ''}`}>
             {/* Header */}
             <div className="p-4 border-b border-gray-50 dark:border-neutral-800/50">
                 <h3 className={`text-xl font-bold ${isToday ? 'text-purple-600' : 'text-gray-900 dark:text-gray-100'}`}>
@@ -88,6 +92,8 @@ export const DayColumn: React.FC<DayColumnProps> = ({
                                 task={task}
                                 onTaskClick={onTaskClick}
                                 onStatusToggle={onStatusToggle}
+                                currentUserId={currentUserId}
+                                onAction={onAction}
                             />
                         ))}
                     </div>

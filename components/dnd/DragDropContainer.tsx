@@ -33,9 +33,11 @@ interface SortableTaskProps {
   task: Task;
   onTaskClick?: (task: Task) => void;
   onStatusToggle?: (task: Task) => void;
+  currentUserId?: string;
+  onAction?: (task: Task, action: string) => void;
 }
 
-export const SortableTask: React.FC<SortableTaskProps> = ({ task, onTaskClick, onStatusToggle }) => {
+export const SortableTask: React.FC<SortableTaskProps> = ({ task, onTaskClick, onStatusToggle, currentUserId, onAction }) => {
   const {
     attributes,
     listeners,
@@ -72,6 +74,8 @@ export const SortableTask: React.FC<SortableTaskProps> = ({ task, onTaskClick, o
         task={task}
         onClick={onTaskClick}
         onStatusToggle={onStatusToggle}
+        currentUserId={currentUserId}
+        onAction={onAction}
       />
     </div>
   );

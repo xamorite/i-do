@@ -43,6 +43,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Set session cookie for middleware
         document.cookie = `session=true; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`; // 30 days
 
+        // Sync User Profile (Ensure username exists)
+        try {
+          const token = await firebaseUser.getIdToken();
+          fetch('/api/users/sync', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).catch(err => console.error('User sync failed', err));
+        } catch (e) {
+          console.error('Error syncing user profile', e);
+        }
+
         // Fetch user role from Firestore
         try {
           const role = await getUserRole(firebaseUser.uid);

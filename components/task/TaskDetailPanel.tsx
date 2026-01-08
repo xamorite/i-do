@@ -11,7 +11,9 @@ import {
   CheckCircle2,
   Circle
 } from 'lucide-react';
-import { Task } from '@/lib/types';
+import { Task, SharedUser } from '@/lib/types';
+import { UserAutocomplete } from '@/components/partners/UserAutocomplete';
+import { getIdTokenHeader } from '@/lib/getIdToken';
 
 interface TaskDetailPanelProps {
   task: Task | null;
@@ -31,14 +33,63 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [estimate, setEstimate] = useState<number | ''>('');
+  const [shares, setShares] = useState<SharedUser[]>([]);
 
   useEffect(() => {
     if (task) {
       setTitle(task.title);
       setNotes(task.notes || '');
       setEstimate(task.estimateMinutes || '');
+      fetchShares();
     }
   }, [task]);
+
+  const fetchShares = async () => {
+    if (!task) return;
+    try {
+      const headers = await getIdTokenHeader() as HeadersInit;
+      const res = await fetch(`/api/tasks/${task.id}/share`, { headers });
+      const data = await res.json();
+      if (data.shares) setShares(data.shares);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleShare = async (user: any) => {
+    if (!task) return;
+    try {
+      const headers = await getIdTokenHeader() as HeadersInit;
+      const res = await fetch(`/api/tasks/${task.id}/share`, {
+        method: 'POST',
+        headers: { ...headers as any, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partnerUserId: user.userId })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to share');
+        return;
+      }
+      fetchShares();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUnshare = async (userId: string) => {
+    if (!task) return;
+    if (!confirm('Remove access?')) return;
+    try {
+      const headers = await getIdTokenHeader() as HeadersInit;
+      await fetch(`/api/tasks/${task.id}/share?partnerUserId=${userId}`, {
+        method: 'DELETE',
+        headers
+      });
+      fetchShares();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   if (!isOpen || !task) return null;
 
@@ -141,15 +192,75 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 </div>
               </div>
 
-              {task.originalIntegration && (
-                <div className="flex items-center gap-4 text-gray-500 dark:text-gray-400">
-                  <Tag size={18} className="flex-shrink-0" />
-                  <div className="flex-1">
-                    <span className="block text-[11px] font-medium uppercase mb-0.5">Integration</span>
-                    <span className="text-gray-900 dark:text-gray-100 capitalize">{task.originalIntegration}</span>
-                  </div>
+            </div>
+
+            {/* Accountability Section */}
+            <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-neutral-800">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Accountability</h3>
+
+              <div className="flex items-center gap-4 text-gray-500 dark:text-gray-400">
+                <div className="w-[18px] flex justify-center"><Tag size={16} /></div>
+                <div className="flex-1">
+                  <span className="block text-[11px] font-medium uppercase mb-0.5">Partner ID</span>
+                  <input
+                    type="text"
+                    value={task.accountabilityPartnerId || ''}
+                    onChange={(e) => handleUpdate({ accountabilityPartnerId: e.target.value })}
+                    className="bg-transparent border-b border-gray-200 dark:border-neutral-800 focus:border-purple-500 focus:ring-0 p-0 text-gray-900 dark:text-gray-100 w-full text-xs py-1"
+                    placeholder="Paste user ID"
+                  />
                 </div>
-              )}
+              </div>
+
+              <div className="flex items-center gap-4 text-gray-500 dark:text-gray-400">
+                <div className="w-[18px] flex justify-center"><Tag size={16} /></div>
+                <div className="flex-1">
+                  <span className="block text-[11px] font-medium uppercase mb-0.5">Owner ID</span>
+                  <input
+                    type="text"
+                    value={task.ownerId || task.userId || ''}
+                    onChange={(e) => {
+                      // If changing owner, we might want to trigger the delegation flow status
+                      const newOwnerId = e.target.value;
+                      handleUpdate({
+                        ownerId: newOwnerId,
+                        userId: newOwnerId,
+                        status: newOwnerId !== task.createdBy ? 'pending_acceptance' : 'planned'
+                      });
+                    }}
+                    className="bg-transparent border-b border-gray-200 dark:border-neutral-800 focus:border-purple-500 focus:ring-0 p-0 text-gray-900 dark:text-gray-100 w-full text-xs py-1"
+                    placeholder="Paste user ID"
+                  />
+                </div>
+              </div>
+
+              {/* Shared With */}
+              <div className="flex items-start gap-4 text-gray-500 dark:text-gray-400">
+                <div className="w-[18px] flex justify-center mt-1"><Tag size={16} /></div>
+                <div className="flex-1">
+                  <span className="block text-[11px] font-medium uppercase mb-0.5">Shared With</span>
+
+                  {/* List current shares */}
+                  {shares.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {shares.map((u, i) => (
+                        <div key={i} className="flex items-center gap-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full text-xs">
+                          <span className="max-w-[100px] truncate">{u.userId}</span>
+                          <span className="opacity-50 text-[10px]">({u.role})</span>
+                          <button onClick={() => handleUnshare(u.userId)}>
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <UserAutocomplete
+                    onSelect={handleShare}
+                    placeholder="Type @username to share..."
+                  />
+                </div>
+              </div>
             </div>
 
             <hr className="border-gray-100 dark:border-neutral-800" />
