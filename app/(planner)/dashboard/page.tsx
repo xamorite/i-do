@@ -421,9 +421,10 @@ function DashboardPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const googleProfile = user?.providerData.find(p => p.providerId === 'google.com');
-  const greetingName = googleProfile
-    ? (googleProfile.displayName?.split(' ')[0] || user?.displayName?.split(' ')[0] || 'User')
-    : 'user';
+  const greetingName = user?.displayName?.split(' ')[0]
+    || googleProfile?.displayName?.split(' ')[0]
+    || user?.email?.split('@')[0]
+    || 'User';
 
   const handleAccountabilityAction = async (task: Task, action: string) => {
     const dStr = task.plannedDate || selectedDate.toISOString().split('T')[0];
