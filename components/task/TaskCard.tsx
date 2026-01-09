@@ -10,6 +10,7 @@ import {
   AlertCircle,
   MoreVertical
 } from 'lucide-react';
+import { getCategoryStyles } from '@/lib/constants';
 
 interface TaskCardProps {
   task: Task;
@@ -47,6 +48,8 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
     return icons[task.originalIntegration] || null;
   };
 
+  const categoryStyle = getCategoryStyles(task.channel || undefined);
+
   const handleMainAction = (e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -76,7 +79,8 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
   return (
     <div
       onClick={() => onClick?.(task)}
-      className="group bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-xl p-3 shadow-sm hover:shadow-md hover:border-purple-200 dark:hover:border-purple-900/50 transition-all cursor-pointer flex flex-col gap-2"
+      className={`group bg-white dark:bg-neutral-900 border-l-4 border-y border-r border-gray-200 dark:border-neutral-800 rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col gap-2 ${categoryStyle.borderColor} ${isDone ? 'opacity-60 grayscale' : ''}`}
+      style={{ borderLeftColor: isDone ? undefined : undefined }} // Let class handle it, or force style if needed
     >
       <div className="flex items-start gap-3 w-full">
         <button
@@ -142,9 +146,8 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
         </div>
 
         {task.channel && (
-          <div className="flex items-center gap-1 text-[10px] font-bold text-purple-600 dark:text-purple-400">
-            <span className="opacity-50">#</span>
-            <span>{task.channel}</span>
+          <div className={`flex items-center gap-1 text-[10px] font-bold ${categoryStyle.color} uppercase tracking-wider`}>
+            <span>{categoryStyle.label}</span>
           </div>
         )}
       </div>

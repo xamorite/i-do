@@ -22,6 +22,7 @@ import { getIdTokenHeader } from '@/lib/getIdToken';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { getCategoryStyles } from '@/lib/constants';
 
 interface TaskDetailPanelProps {
   task: Task | null;
@@ -157,6 +158,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   };
 
   const isDone = task.status === 'done';
+  const categoryStyle = getCategoryStyles(task.channel || undefined);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -169,7 +171,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
       <div className="absolute inset-y-0 right-0 max-w-full flex">
         <div className="w-screen max-w-md transform transition-transform duration-300 ease-in-out bg-white dark:bg-neutral-900 shadow-2xl flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-neutral-800">
+          <div className={`flex items-center justify-between p-4 border-b ${categoryStyle.bgColor} ${categoryStyle.borderColor}`}>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => handleUpdate({ status: isDone ? 'planned' : 'done' })}
