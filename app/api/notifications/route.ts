@@ -24,9 +24,13 @@ export async function GET(request: NextRequest) {
         });
 
         return NextResponse.json({ notifications });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error fetching notifications:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        console.error('Stack:', error.stack);
+        return NextResponse.json({
+            error: 'Internal Server Error',
+            details: error.message
+        }, { status: 500 });
     }
 }
 
@@ -42,9 +46,10 @@ export async function PATCH(request: NextRequest) {
         const body = await request.json();
         await adminDb.collection('notifications').doc(id).update(body);
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error updating notification:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        console.error('Stack:', error.stack);
+        return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
 }
 
