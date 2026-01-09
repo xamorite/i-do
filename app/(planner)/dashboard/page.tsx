@@ -63,6 +63,8 @@ import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { PartnerManager } from '@/components/partners/PartnerManager';
+import { usePartnersRealtime } from '@/hooks/usePartnersRealtime';
+import { PartnerRelationship } from '@/lib/types';
 
 function DashboardPage() {
   const { user, username } = useAuth();
@@ -76,6 +78,9 @@ function DashboardPage() {
     updateTask: apiUpdateTask,
     deleteTask: apiDeleteTask
   } = useTasksRealtime();
+
+  // Real-time partners for accountability features
+  const { partners } = usePartnersRealtime();
 
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [slackMessages, setSlackMessages] = useState<any[]>([]);
@@ -733,6 +738,7 @@ function DashboardPage() {
         }}
         onUpdate={handleTaskUpdate}
         onDelete={handleTaskDelete}
+        partners={partners}
       />
 
       <CreateTaskModal
