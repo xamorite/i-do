@@ -187,7 +187,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 <div className="flex-1">
                   <span className="block text-[11px] font-medium uppercase mb-0.5">Priority</span>
                   <select
-                    value={priority}
+                    value={priority || 'medium'}
                     onChange={(e) => {
                       const p = e.target.value as any;
                       setPriority(p);
@@ -261,7 +261,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 <div className="flex-1">
                   <span className="block text-[11px] font-medium uppercase mb-0.5">Recurrence</span>
                   <select
-                    value={recurrence}
+                    value={recurrence || ''}
                     onChange={(e) => {
                       setRecurrence(e.target.value);
                       handleUpdate({
@@ -305,7 +305,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 <div className="flex-1">
                   <span className="block text-[11px] font-medium uppercase mb-0.5">Category</span>
                   <select
-                    value={channel}
+                    value={channel || ''}
                     onChange={(e) => {
                       setChannel(e.target.value);
                       handleUpdate({ channel: e.target.value });
@@ -340,7 +340,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                         {task.accountabilityPartnerId}
                       </span>
                       <button
-                        onClick={() => handleUpdate({ accountabilityPartnerId: undefined })}
+                        onClick={() => handleUpdate({ accountabilityPartnerId: null })}
                         className="text-gray-400 hover:text-red-500 transition-colors"
                       >
                         <X size={14} />

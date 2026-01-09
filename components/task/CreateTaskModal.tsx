@@ -55,20 +55,21 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 title: title.trim(),
                 notes,
                 priority,
-                channel: channel || undefined,
                 plannedDate: plannedDate || null,
                 dueDate: dueDate || null,
                 startTime: startTime || null,
                 endTime: endTime || null,
-                recurrencePattern: recurrence || undefined,
                 isRecurring: !!recurrence,
                 estimateMinutes: typeof estimate === 'number' ? estimate : null,
                 status: 'planned',
                 ownerId: ownerId || user?.uid,
                 userId: user?.uid, // Creator
                 createdBy: user?.uid,
-                accountabilityPartnerId: partnerId,
             };
+
+            if (channel) newTask.channel = channel;
+            if (recurrence) newTask.recurrencePattern = recurrence;
+            if (partnerId) newTask.accountabilityPartnerId = partnerId;
 
             await onCreate(newTask);
             onClose();
@@ -129,7 +130,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 <div className="flex-1">
                                     <span className="block text-[11px] font-medium uppercase mb-0.5">Priority</span>
                                     <select
-                                        value={priority}
+                                        value={priority || 'medium'}
                                         onChange={(e) => setPriority(e.target.value as any)}
                                         className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium text-gray-900 dark:text-gray-100 uppercase"
                                     >
@@ -190,7 +191,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 <div className="flex-1">
                                     <span className="block text-[11px] font-medium uppercase mb-0.5">Recurrence</span>
                                     <select
-                                        value={recurrence}
+                                        value={recurrence || ''}
                                         onChange={(e) => setRecurrence(e.target.value)}
                                         className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium text-gray-900 dark:text-gray-100"
                                     >
@@ -224,7 +225,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 <div className="flex-1">
                                     <span className="block text-[11px] font-medium uppercase mb-0.5">Category</span>
                                     <select
-                                        value={channel}
+                                        value={channel || ''}
                                         onChange={(e) => setChannel(e.target.value)}
                                         className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium text-gray-900 dark:text-gray-100"
                                     >

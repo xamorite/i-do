@@ -66,9 +66,9 @@ export interface Task {
   actualMinutes?: number | null;
   // Accountability fields
   userId?: string; // Database field for owner (for backward compatibility / indexing)
-  ownerId?: string; // The user responsible for doing the work
+  ownerId?: string | null; // The user responsible for doing the work
   createdBy?: string; // The user who created the task
-  accountabilityPartnerId?: string; // The user who verifies completion
+  accountabilityPartnerId?: string | null; // The user who verifies completion
   rejectionReason?: string;
 
   status:
@@ -82,7 +82,7 @@ export interface Task {
   | 'rejected'           // Owner rejected delegation
   | 'blocked';           // General blocked state
 
-  priority?: 'low' | 'medium' | 'high' | 'critical';
+  priority?: 'low' | 'medium' | 'high' | 'critical' | null;
   tags?: string[];
   attachments?: {
     id: string;
@@ -95,11 +95,11 @@ export interface Task {
   startTime?: string | null;
   endTime?: string | null;
   originalIntegration?: string | null;
-  channel?: string; // Category/channel for task organization
+  channel?: string | null; // Category/channel for task organization
   subtasks?: Subtask[]; // Subtasks for breaking down work
   timeLogs?: TimeLog[]; // Time tracking logs
   isRecurring?: boolean;
-  recurrencePattern?: string; // cron-like pattern or simple "daily", "weekly", etc.
+  recurrencePattern?: string | null; // cron-like pattern or simple "daily", "weekly", etc.
   createdAt?: string;
   updatedAt?: string;
   sharedWith?: SharedUser[];
