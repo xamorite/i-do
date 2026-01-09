@@ -14,6 +14,9 @@ import {
 import { Task, User } from '@/lib/types';
 import { UserAutocomplete } from '@/components/partners/UserAutocomplete';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePartnersRealtime } from '@/hooks/usePartnersRealtime';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface CreateTaskModalProps {
     isOpen: boolean;
@@ -42,6 +45,33 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     const [ownerId, setOwnerId] = useState<string | undefined>(undefined);
     const [partnerId, setPartnerId] = useState<string | undefined>(undefined);
     const [submitting, setSubmitting] = useState(false);
+
+    // Partners Logic
+    const { partners } = usePartnersRealtime();
+    const [partnerProfiles, setPartnerProfiles] = useState<Record<string, string>>({});
+
+    React.useEffect(() => {
+        const fetchPartnerProfiles = async () => {
+            if (!partners || partners.length === 0) return;
+            const profiles: Record<string, string> = {};
+
+            for (const p of partners) {
+                const otherId = p.requesterId === user?.uid ? p.recipientId : p.requesterId;
+                if (profiles[otherId]) continue;
+                try {
+                    const userDoc = await getDoc(doc(db, 'users', otherId));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        profiles[otherId] = userData.displayName || userData.username || 'Unknown User';
+                    }
+                } catch (e) {
+                    console.error("Error fetching profile", e);
+                }
+            }
+            setPartnerProfiles(profiles);
+        };
+        if (partners && user) fetchPartnerProfiles();
+    }, [partners, user]);
 
     if (!isOpen) return null;
 
@@ -249,14 +279,30 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         <span className="block text-[11px] font-medium uppercase mb-0.5">Accountability Partner</span>
                                         {partnerId ? (
                                             <div className="flex items-center gap-2 bg-purple-50 dark:bg-purple-900/20 px-2 py-1.5 rounded-lg border border-purple-100 dark:border-purple-800">
-                                                <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">{partnerId}</span>
+                                                <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                                                    {partnerProfiles[partnerId] || partnerId}
+                                                </span>
                                                 <button onClick={() => setPartnerId(undefined)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
                                             </div>
                                         ) : (
-                                            <UserAutocomplete
-                                                onSelect={(u) => setPartnerId(u.userId)}
-                                                placeholder="Search partner..."
-                                            />
+                                            <select
+                                                className="w-full bg-transparent border border-gray-200 dark:border-gray-700 rounded-md p-1.5 text-sm"
+                                                onChange={(e) => setPartnerId(e.target.value)}
+                                                value=""
+                                            >
+                                                <option value="" disabled>Select a partner...</option>
+                                                {partners?.filter(p => p.status === 'active').map(p => {
+                                                    const otherId = p.requesterId === user?.uid ? p.recipientId : p.requesterId;
+                                                    return (
+                                                        <option key={p.id} value={otherId}>
+                                                            {partnerProfiles[otherId] || otherId}
+                                                        </option>
+                                                    );
+                                                })}
+                                                {(!partners || partners.filter(p => p.status === 'active').length === 0) && (
+                                                    <option value="" disabled>No active partners found</option>
+                                                )}
+                                            </select>
                                         )}
                                     </div>
                                 </div>
