@@ -9,78 +9,114 @@ let _initialized = false;
 
 function initializeFirebaseAdmin() {
   if (_initialized) return;
-  
+
+  // Log environment state for debugging
+  const hasServiceAccount = !!(process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const hasMinimalCreds = !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY);
+  const hasGoogleCreds = !!process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  console.log(`[Firebase Admin] Init check - hasServiceAccount: ${hasServiceAccount}, hasMinimalCreds: ${hasMinimalCreds}, hasGoogleCreds: ${hasGoogleCreds}, NODE_ENV: ${process.env.NODE_ENV}`);
+
   // During Next.js build phase, skip initialization to avoid build errors
-  // The app will be initialized at runtime when actually needed
-  if (process.env.NEXT_PHASE === 'phase-production-build' || 
-      (process.env.NODE_ENV === 'production' && !process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.FIREBASE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
-    // Silently skip during build - will initialize at runtime
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    console.log('[Firebase Admin] Skipping init during build phase');
     _initialized = true;
     return;
   }
-  
+
   if (!getApps().length) {
     try {
+      // Option 1: Individual env vars (recommended for Netlify to avoid 4KB limit)
+      if (hasMinimalCreds) {
+        console.log('[Firebase Admin] Using minimal credentials (individual env vars)');
+        const privateKey = process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n');
+
+        admin.initializeApp({
+          credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID!,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
+            privateKey: privateKey,
+          }),
+        });
+        console.log(`[Firebase Admin] Initialized with project: ${process.env.FIREBASE_PROJECT_ID}`);
+        _initialized = true;
+        return;
+      }
+
+      // Option 2: Full JSON service account
       const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
       if (serviceAccountJson) {
+        console.log('[Firebase Admin] Found service account env var');
         let sanitizedJson = serviceAccountJson;
-        // Check if base64 encoded (starts with '{' in base64 is 'ew')
+
+        // Check if base64 encoded
         if (!serviceAccountJson.trim().startsWith('{')) {
           try {
             sanitizedJson = Buffer.from(serviceAccountJson, 'base64').toString('utf8');
+            console.log('[Firebase Admin] Decoded base64 service account');
           } catch (e) {
-            // ignore, assume raw json
+            console.log('[Firebase Admin] Not base64, using raw JSON');
           }
         }
 
-        // Netlify/Vercel often mess up newlines in raw env vars, so we fix them manually
-        sanitizedJson = sanitizedJson.replace(/\\n/g, '\n');
-        const serviceAccount = JSON.parse(sanitizedJson);
+        // Fix newlines
+        sanitizedJson = sanitizedJson.replace(/\\\\n/g, '\\n').replace(/\\n/g, '\n');
 
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
-        });
-      } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        try {
+          const serviceAccount = JSON.parse(sanitizedJson);
+          console.log(`[Firebase Admin] Parsed service account for project: ${serviceAccount.project_id}`);
+
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+          });
+          console.log('[Firebase Admin] Initialized successfully with service account');
+        } catch (parseError: any) {
+          console.error('[Firebase Admin] Failed to parse service account JSON:', parseError.message);
+          throw parseError;
+        }
+      } else if (hasGoogleCreds) {
+        console.log('[Firebase Admin] Using GOOGLE_APPLICATION_CREDENTIALS');
         admin.initializeApp();
       } else {
         // Check for local service-account.json (only in development)
         if (process.env.NODE_ENV !== 'production') {
           const localServiceAccountPath = path.join(process.cwd(), 'service-account.json');
           if (fs.existsSync(localServiceAccountPath)) {
+            console.log('[Firebase Admin] Using local service-account.json');
             const serviceAccount = JSON.parse(fs.readFileSync(localServiceAccountPath, 'utf8'));
             admin.initializeApp({
               credential: admin.credential.cert(serviceAccount),
             });
           } else {
-            // Try default initialization
             try {
               admin.initializeApp();
+              console.log('[Firebase Admin] Initialized with default credentials');
             } catch (e) {
-              // Silently fail - will be initialized at runtime
+              console.warn('[Firebase Admin] Default init failed');
             }
           }
         } else {
-          // In production without credentials, skip initialization during build
-          // Will be initialized at runtime when environment variables are available
+          console.error('[Firebase Admin] PRODUCTION: No service account credentials found!');
+          console.error('[Firebase Admin] Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY env vars');
         }
       }
     } catch (error: any) {
-      // During build time, don't crash - will be initialized at runtime
+      console.error('[Firebase Admin] Initialization error:', error.message);
       if (process.env.NEXT_PHASE === 'phase-production-build') {
         return;
       }
-      // In runtime, try to initialize with default credentials
       try {
         if (!getApps().length) {
           admin.initializeApp();
         }
       } catch (e) {
-        // If this fails, it will be retried on first use
+        console.error('[Firebase Admin] Fallback init also failed');
       }
     }
+  } else {
+    console.log('[Firebase Admin] Already initialized');
   }
-  
+
   _initialized = true;
 }
 
