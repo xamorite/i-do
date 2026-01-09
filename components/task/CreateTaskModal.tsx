@@ -38,6 +38,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     const [endTime, setEndTime] = useState('');
     const [recurrence, setRecurrence] = useState('');
     const [estimate, setEstimate] = useState<number | ''>('');
+    const [channel, setChannel] = useState('');
     const [ownerId, setOwnerId] = useState<string | undefined>(undefined);
     const [partnerId, setPartnerId] = useState<string | undefined>(undefined);
     const [submitting, setSubmitting] = useState(false);
@@ -54,6 +55,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 title: title.trim(),
                 notes,
                 priority,
+                channel: channel || undefined,
                 plannedDate: plannedDate || null,
                 dueDate: dueDate || null,
                 startTime: startTime || null,
@@ -75,6 +77,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             setNotes('');
             setPriority('medium');
             setEstimate('');
+            setChannel('');
         } catch (error) {
             console.error('Failed to create task:', error);
         } finally {
@@ -212,6 +215,25 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         className="bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 w-24"
                                         placeholder="--"
                                     />
+                                </div>
+                            </div>
+
+                            {/* Category */}
+                            <div className="flex items-center gap-4 text-gray-500 dark:text-gray-400">
+                                <Tag size={18} className="flex-shrink-0" />
+                                <div className="flex-1">
+                                    <span className="block text-[11px] font-medium uppercase mb-0.5">Category</span>
+                                    <select
+                                        value={channel}
+                                        onChange={(e) => setChannel(e.target.value)}
+                                        className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium text-gray-900 dark:text-gray-100"
+                                    >
+                                        <option value="">No Category</option>
+                                        <option value="work">Work</option>
+                                        <option value="personal">Personal</option>
+                                        <option value="health">Health</option>
+                                        <option value="errands">Errands</option>
+                                    </select>
                                 </div>
                             </div>
 

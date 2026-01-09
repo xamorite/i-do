@@ -47,6 +47,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [recurrence, setRecurrence] = useState('');
+  const [channel, setChannel] = useState('');
 
   useEffect(() => {
     if (task) {
@@ -58,6 +59,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
       setStartTime(task.startTime || '');
       setEndTime(task.endTime || '');
       setRecurrence(task.recurrencePattern || '');
+      setChannel(task.channel || '');
       fetchShares();
     }
   }, [task]);
@@ -297,6 +299,28 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 </div>
               </div>
 
+              {/* Category */}
+              <div className="flex items-center gap-4 text-gray-500 dark:text-gray-400">
+                <Tag size={18} className="flex-shrink-0" />
+                <div className="flex-1">
+                  <span className="block text-[11px] font-medium uppercase mb-0.5">Category</span>
+                  <select
+                    value={channel}
+                    onChange={(e) => {
+                      setChannel(e.target.value);
+                      handleUpdate({ channel: e.target.value });
+                    }}
+                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="">No Category</option>
+                    <option value="work">Work</option>
+                    <option value="personal">Personal</option>
+                    <option value="health">Health</option>
+                    <option value="errands">Errands</option>
+                  </select>
+                </div>
+              </div>
+
             </div>
 
             {/* Accountability Section */}
@@ -433,6 +457,6 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
