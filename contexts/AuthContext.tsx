@@ -13,7 +13,8 @@ import {
 } from '@/lib/auth';
 import { UserRole, AuthContextType } from '@/lib/types';
 import { doc, onSnapshot as onDocSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -100,9 +101,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, displayName: string): Promise<void> => {
-    await authSignUp(email, password, displayName);
-    // Auth state change will be handled by the listener
+  const signUp = async (email: string, password: string, displayName: string, username: string): Promise<void> => {
+    try {
+      setLoading(true);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Update Auth Profile
+      await updateProfile(userCredential.user, { displayName });
+
+      // Sync User Profile with preferred username
+      const token = await userCredential.user.getIdToken();
+      // We call the sync API explicitly to ensure the username is set immediately
+      // The real-time listener will then pick it up
+      await fetch('/api/users/sync', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ preferredUsername: username })
+      });
+
+    } catch (error) {
+      console.error('Error signing up:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signIn = async (email: string, password: string): Promise<void> => {

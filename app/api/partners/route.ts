@@ -44,22 +44,31 @@ export async function POST(request: Request) {
 
     try {
         const body = await request.json();
-        const { recipientEmail, recipientId } = body;
+        const { recipientEmail, recipientId, recipientUsername } = body;
 
         let targetUserId = recipientId;
 
-        // If email provided, find user by email
+        // If username provided, find user by username
+        if (!targetUserId && recipientUsername) {
+            const cleanUsername = recipientUsername.toLowerCase().trim();
+            const q = await adminDb.collection('users').where('username', '==', cleanUsername).limit(1).get();
+            if (!q.empty) {
+                targetUserId = q.docs[0].id;
+            }
+        }
+
+        // Fallback: If email provided, find user by email
         if (!targetUserId && recipientEmail) {
             try {
                 const userRecord = await adminAuth.getUserByEmail(recipientEmail);
                 targetUserId = userRecord.uid;
             } catch (e) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
+                // User not found by email
             }
         }
 
         if (!targetUserId) {
-            return NextResponse.json({ error: 'Recipient ID or Email required' }, { status: 400 });
+            return NextResponse.json({ error: 'User not found. Check availability of username or email.' }, { status: 404 });
         }
 
         if (targetUserId === uid) {

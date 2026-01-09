@@ -38,24 +38,44 @@ export async function POST(request: Request) {
             return new Response(JSON.stringify({ user: userDoc.data() }), { status: 200 });
         }
 
-        // Create user with username
-        let username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+        const body = await request.json().catch(() => ({}));
+        const { preferredUsername } = body;
+
+        let username = '';
         let isUnique = false;
         let attempts = 0;
 
-        while (!isUnique && attempts < 5) {
-            const q = await adminDb.collection('users').where('username', '==', username).get();
-            if (q.empty) {
-                isUnique = true;
-            } else {
-                username = `${username}${Math.floor(Math.random() * 1000)}`;
-                attempts++;
+        // Check availability of preferred username if provided
+        if (preferredUsername) {
+            const cleanUsername = preferredUsername.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanUsername.length < 3) {
+                return new Response(JSON.stringify({ error: 'Username must be at least 3 characters' }), { status: 400 });
             }
-        }
 
-        if (!isUnique) {
-            // Fallback to random if super unlucky
-            username = `user${Math.floor(Math.random() * 1000000)}`;
+            const existingUser = await adminDb.collection('users').where('username', '==', cleanUsername).get();
+            if (!existingUser.empty) {
+                return new Response(JSON.stringify({ error: 'Username already taken' }), { status: 409 });
+            }
+            // Use the verified preferred username
+            username = cleanUsername;
+            isUnique = true;
+        } else {
+            // Auto-generate if no preference provided
+            username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+            while (!isUnique && attempts < 5) {
+                const q = await adminDb.collection('users').where('username', '==', username).get();
+                if (q.empty) {
+                    isUnique = true;
+                } else {
+                    username = `${username}${Math.floor(Math.random() * 1000)}`;
+                    attempts++;
+                }
+            }
+
+            if (!isUnique) {
+                // Fallback to random if super unlucky
+                username = `user${Math.floor(Math.random() * 1000000)}`;
+            }
         }
 
         const userData = {

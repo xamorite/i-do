@@ -11,6 +11,7 @@ export const SignUpForm: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const { signUp, signInWithGoogle, user, userRole, loading } = useAuth();
@@ -43,10 +44,20 @@ export const SignUpForm: React.FC = () => {
       return;
     }
 
+    if (!username.trim() || username.length < 3) {
+      setError('Username must be at least 3 characters');
+      return;
+    }
+
+    if (!/^[a-z0-9]+$/i.test(username)) {
+      setError('Username can only contain letters and numbers');
+      return;
+    }
+
     setIsAuthenticating(true);
 
     try {
-      await signUp(email, password, displayName.trim());
+      await signUp(email, password, displayName.trim(), username.toLowerCase().trim());
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
@@ -83,6 +94,25 @@ export const SignUpForm: React.FC = () => {
               required
               className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
               placeholder="John Doe"
+            />
+          </div>
+        </div>
+
+        {/* Username Field */}
+        <div>
+          <label htmlFor="username" className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            Username
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold">@</span>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
+              required
+              className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
+              placeholder="johndoe"
             />
           </div>
         </div>
