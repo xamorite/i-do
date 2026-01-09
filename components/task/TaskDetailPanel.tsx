@@ -19,6 +19,9 @@ import {
 import { Task, SharedUser, PartnerRelationship } from '@/lib/types';
 import { UserAutocomplete } from '@/components/partners/UserAutocomplete';
 import { getIdTokenHeader } from '@/lib/getIdToken';
+import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface TaskDetailPanelProps {
   task: Task | null;
@@ -34,11 +37,15 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   isOpen,
   onClose,
   onUpdate,
-  onDelete
+  onDelete,
+  partners
 }) => {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [estimate, setEstimate] = useState<number | ''>('');
+  const { user } = useAuth();
+  const [partnerProfiles, setPartnerProfiles] = useState<Record<string, string>>({}); // uid -> displayName
+  const [loadingPartners, setLoadingPartners] = useState(false);
   const [shares, setShares] = useState<SharedUser[]>([]);
 
   // New Fields State
@@ -63,6 +70,38 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
       fetchShares();
     }
   }, [task]);
+
+  useEffect(() => {
+    const fetchPartnerProfiles = async () => {
+      if (!partners || partners.length === 0) return;
+      setLoadingPartners(true);
+      const profiles: Record<string, string> = {};
+
+      for (const p of partners) {
+        // Determine the *other* person's ID
+        const otherId = p.requesterId === user?.uid ? p.recipientId : p.requesterId;
+        if (profiles[otherId]) continue;
+
+        try {
+          const userDoc = await getDoc(doc(db, 'users', otherId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            profiles[otherId] = userData.displayName || userData.username || 'Unknown User';
+          } else {
+            profiles[otherId] = 'Unknown User';
+          }
+        } catch (e) {
+          console.error("Error fetching profile", e);
+        }
+      }
+      setPartnerProfiles(profiles);
+      setLoadingPartners(false);
+    };
+
+    if (partners && user) {
+      fetchPartnerProfiles();
+    }
+  }, [partners, user]);
 
   const fetchShares = async () => {
     if (!task) return;
@@ -138,6 +177,8 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
               >
                 {isDone ? (
                   <CheckCircle2 className="text-green-500" size={20} />
+                ) : task?.status === 'awaiting_approval' ? (
+                  <Clock className="text-yellow-500" size={20} />
                 ) : (
                   <Circle className="text-gray-400" size={20} />
                 )}
@@ -347,10 +388,65 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <UserAutocomplete
-                      onSelect={(user) => handleUpdate({ accountabilityPartnerId: user.userId })}
-                      placeholder="Assign a partner..."
-                    />
+                    <select
+                      className="w-full bg-transparent border border-gray-200 dark:border-gray-700 rounded-md p-1.5 text-sm"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handleUpdate({ accountabilityPartnerId: e.target.value });
+                        }
+                      }}
+                      value=""
+                    >
+                      <option value="" disabled>Select a partner...</option>
+                      {partners?.filter(p => p.status === 'active').map(p => {
+                        const otherId = p.requesterId === user?.uid ? p.recipientId : p.requesterId;
+                        return (
+                          <option key={p.id} value={otherId}>
+                            {partnerProfiles[otherId] || otherId}
+                          </option>
+                        );
+                      })}
+                      {(!partners || partners.filter(p => p.status === 'active').length === 0) && (
+                        <option value="" disabled>No active partners found</option>
+                      )}
+                    </select>
+                  )}
+                  {/* Status Actions for Accountability */}
+                  {task.accountabilityPartnerId && (
+                    <div className="mt-2 text-xs">
+                      {/* Owner View */}
+                      {user?.uid === task.ownerId && task.status === 'planned' && (
+                        <button
+                          onClick={() => handleUpdate({ status: 'awaiting_approval' })}
+                          className="w-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 py-1 rounded hover:bg-blue-200 transaction-colors"
+                        >
+                          Submit for Review
+                        </button>
+                      )}
+                      {user?.uid === task.ownerId && task.status === 'awaiting_approval' && (
+                        <div className="w-full bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 py-1 rounded text-center">
+                          Pending Partner Approval
+                        </div>
+                      )}
+
+                      {/* Partner View */}
+                      {user?.uid === task.accountabilityPartnerId && task.status === 'awaiting_approval' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleUpdate({ status: 'done' })}
+                            className="flex-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 py-1 rounded hover:bg-green-200"
+                          >
+                            Approve (Done)
+                          </button>
+                          <button
+                            onClick={() => handleUpdate({ status: 'planned', rejectionReason: 'Try again!' })}
+                            className="flex-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 py-1 rounded hover:bg-red-200"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

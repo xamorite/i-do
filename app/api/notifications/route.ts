@@ -14,13 +14,19 @@ export async function GET(request: NextRequest) {
         const snapshot = await adminDb
             .collection('notifications')
             .where('recipientId', '==', userId)
-            .orderBy('createdAt', 'desc')
             .limit(50)
             .get();
 
         const notifications: Notification[] = [];
         snapshot.forEach((doc) => {
             notifications.push({ id: doc.id, ...doc.data() } as Notification);
+        });
+
+        // Sort in memory to avoid composite index requirement
+        notifications.sort((a, b) => {
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return dateB - dateA;
         });
 
         return NextResponse.json({ notifications });
