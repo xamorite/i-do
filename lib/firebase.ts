@@ -1,6 +1,13 @@
+"use client";
+
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  Firestore
+} from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -51,24 +58,12 @@ if (getApps().length === 0) {
 
 // Initialize Firebase services
 export const auth: Auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
 
-// Enable offline persistence for instant loading
-if (typeof window !== 'undefined') {
-  import('firebase/firestore').then(({ enableIndexedDbPersistence }) => {
-    enableIndexedDbPersistence(db).catch((err) => {
-      if (err.code === 'failed-precondition') {
-        console.warn('Firestore persistence failed: Multiple tabs open');
-      } else if (err.code === 'unimplemented') {
-        console.warn('Firestore persistence not supported in this browser');
-      }
-    });
-  });
-}
+// Initialize Firestore with modern persistent cache
+export const db: Firestore = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
 
 export default app;
-
-
-
-
-

@@ -12,6 +12,8 @@ import {
   handleGoogleRedirect,
 } from '@/lib/auth';
 import { UserRole, AuthContextType } from '@/lib/types';
+import { doc, onSnapshot as onDocSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -37,27 +39,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Check for redirect result on mount
     handleGoogleRedirect();
 
-    const unsubscribe = onAuthStateChanged(async (firebaseUser) => {
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(async (firebaseUser) => {
       setUser(firebaseUser);
+
+      // Clean up previous profile listener if it exists
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
 
       if (firebaseUser) {
         // Set session cookie for middleware
         document.cookie = `session=true; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`; // 30 days
 
-        // Sync User Profile (Ensure username exists)
+        // Sync User Profile (Ensure username exists) via API
         try {
           const token = await firebaseUser.getIdToken();
-          const response = await fetch('/api/users/sync', {
+          fetch('/api/users/sync', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const data = await response.json();
-          if (data.user?.username) {
-            setUsername(data.user.username);
-          }
+          }).catch(err => console.error('User sync failed', err));
         } catch (e) {
           console.error('Error syncing user profile', e);
         }
+
+        // Real-time Profile Listener (Resilient to API failures)
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        unsubscribeProfile = onDocSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            if (userData.username) {
+              setUsername(userData.username);
+            }
+          }
+        });
 
         // Fetch user role from Firestore
         try {
@@ -77,7 +94,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   const signUp = async (email: string, password: string, displayName: string): Promise<void> => {
