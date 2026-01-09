@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { DragDropContainer } from '@/components/dnd/DragDropContainer';
 import { TaskDetailPanel } from '@/components/task/TaskDetailPanel';
+import { CreateTaskModal } from '@/components/task/CreateTaskModal';
 import { fetchTaskById } from '@/hooks/useTasks';
 import { useTasksRealtime } from '@/hooks/useTasksRealtime';
 import { upsertDayPlan } from '@/hooks/useDayPlan';
@@ -81,6 +82,7 @@ function DashboardPage() {
   const [notionTasks, setNotionTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCalendarLoading, setIsCalendarLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -451,6 +453,13 @@ function DashboardPage() {
         </div>
 
         <div className="flex items-center space-x-2 lg:space-x-4">
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 bg-linear-to-r from-purple-600 to-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-opacity shadow-sm shadow-purple-500/20"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">New Task</span>
+          </button>
           <div className="hidden sm:block cursor-pointer relative xl:block">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -724,6 +733,15 @@ function DashboardPage() {
         }}
         onUpdate={handleTaskUpdate}
         onDelete={handleTaskDelete}
+      />
+
+      <CreateTaskModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreate={async (task) => {
+          await apiCreateTask(task);
+        }}
+        initialDate={selectedDate.toISOString().split('T')[0]}
       />
     </div >
   );

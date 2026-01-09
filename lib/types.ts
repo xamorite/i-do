@@ -82,6 +82,15 @@ export interface Task {
   | 'rejected'           // Owner rejected delegation
   | 'blocked';           // General blocked state
 
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  tags?: string[];
+  attachments?: {
+    id: string;
+    name: string;
+    url: string;
+    type: 'image' | 'file' | 'link';
+  }[];
+
   isTimeboxed?: boolean;
   startTime?: string | null;
   endTime?: string | null;
