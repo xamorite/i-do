@@ -14,6 +14,7 @@ export interface User {
 export interface AuthContextType {
   user: FirebaseUser | null;
   userRole: UserRole | null;
+  username: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;

@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { DragDropContainer } from '@/components/dnd/DragDropContainer';
 import { TaskDetailPanel } from '@/components/task/TaskDetailPanel';
-import { fetchTasks, createTask, updateTask, deleteTask, fetchTaskById } from '@/hooks/useTasks';
+import { fetchTaskById } from '@/hooks/useTasks';
+import { useTasksRealtime } from '@/hooks/useTasksRealtime';
 import { upsertDayPlan } from '@/hooks/useDayPlan';
 import { Task } from '@/lib/types';
 import { TaskInput } from '@/components/task/TaskInput';
@@ -63,21 +64,45 @@ import { NotificationCenter } from '@/components/notifications/NotificationCente
 import { PartnerManager } from '@/components/partners/PartnerManager';
 
 function DashboardPage() {
-  const { user } = useAuth();
+  const { user, username } = useAuth();
   const router = useRouter();
-  const [tasks, setTasks] = useState<Record<string, Task[]>>({});
+
+  // Real-time task syncing
+  const {
+    tasks: allTasks,
+    loading: tasksLoading,
+    createTask: apiCreateTask,
+    updateTask: apiUpdateTask,
+    deleteTask: apiDeleteTask
+  } = useTasksRealtime();
+
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [slackMessages, setSlackMessages] = useState<any[]>([]);
+  const [notionTasks, setNotionTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [isCalendarLoading, setIsCalendarLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentView, setCurrentView] = useState<'home' | 'today' | 'week' | 'month'>('home');
   const [activeIntegration, setActiveIntegration] = useState<string | null>('google-calendar');
   const [isRightPaneOpen, setIsRightPaneOpen] = useState(true);
   const [visibleSources, setVisibleSources] = useState<Set<string>>(new Set(['google', 'notion', 'slack', 'task']));
+
+  // Compute grouped tasks from the real-time flat array
+  const tasks = React.useMemo(() => {
+    const grouped: Record<string, Task[]> = {};
+
+    // Mix in Notion tasks if they exist
+    const combined = [...allTasks, ...notionTasks];
+
+    combined.forEach(task => {
+      const dateKey = task.plannedDate || 'backlog';
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+      grouped[dateKey].push(task);
+    });
+    return grouped;
+  }, [allTasks, notionTasks]);
 
   const toggleSource = (source: string) => {
     setVisibleSources(prev => {
@@ -111,67 +136,15 @@ function DashboardPage() {
     ? [today, tomorrow, afterTomorrow]
     : [today];
 
-  const datesToLoad = [today, tomorrow, afterTomorrow];
-
   useEffect(() => {
-    loadAllTasks();
     loadCalendarEvents();
     loadSlackMessages();
-  }, [selectedDate, currentView]);
+    if (visibleSources.has('notion')) {
+      loadNotionTasks();
+    }
+  }, [selectedDate, currentView, visibleSources]);
 
   // Method Definitions
-  const loadAllTasks = async () => {
-    setIsLoading(true);
-    try {
-      const results: Record<string, Task[]> = {};
-      let datesToLoad = [today, tomorrow, afterTomorrow];
-
-      if (currentView === 'week') {
-        const monday = new Date(selectedDate);
-        const day = monday.getDay();
-        const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
-        monday.setDate(diff);
-        datesToLoad = Array.from({ length: 7 }, (_, i) => {
-          const d = new Date(monday);
-          d.setDate(monday.getDate() + i);
-          return d;
-        });
-      } else if (currentView === 'month') {
-        const monthStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-        const startDay = monthStart.getDay();
-        const gridStart = new Date(monthStart);
-        gridStart.setDate(gridStart.getDate() - (startDay === 0 ? 6 : startDay - 1));
-        datesToLoad = Array.from({ length: 42 }, (_, i) => {
-          const d = new Date(gridStart);
-          d.setDate(gridStart.getDate() + i);
-          return d;
-        });
-      }
-
-      await Promise.all(datesToLoad.map(async (d) => {
-        const dStr = d.toISOString().split('T')[0];
-        const data = await fetchTasks(`plannedDate=${dStr}`);
-        results[dStr] = data.tasks || [];
-      }));
-
-      // Fetch Notion tasks if enabled
-      if (visibleSources.has('notion')) {
-        const notionTasks = await fetchNotionTasks();
-        notionTasks.forEach((nt: any) => {
-          const date = nt.plannedDate;
-          if (!results[date]) results[date] = [];
-          results[date].push(nt);
-        });
-      }
-
-      setTasks(results);
-    } catch (err) {
-      console.error('Failed to load tasks:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const loadCalendarEvents = async () => {
     setIsCalendarLoading(true);
     try {
@@ -223,66 +196,53 @@ function DashboardPage() {
     }
   };
 
+  const loadNotionTasks = async () => {
+    try {
+      const msgs = await fetchNotionTasks();
+      setNotionTasks(msgs || []);
+    } catch (err) {
+      console.error('Failed to load Notion tasks:', err);
+    }
+  }
+
   const handleSmartAddTask = async (val: { title: string, channel?: string, estimate?: number, date?: Date }) => {
     try {
       const taskDate = val.date ? val.date.toISOString().split('T')[0] : selectedDate.toISOString().split('T')[0];
-      const res = await createTask({
+      await apiCreateTask({
         title: val.title,
         plannedDate: taskDate,
         status: 'planned',
         channel: val.channel,
         estimateMinutes: val.estimate,
       });
-
-      // Update state for the specific date if it's currently showing
-      if (tasks[taskDate]) {
-        setTasks(prev => ({
-          ...prev,
-          [taskDate]: [...(prev[taskDate] || []), res.task]
-        }));
-      } else {
-        // If not showing, but we just added it, maybe reload or just alert
-        alert(`Task added to ${val.date?.toLocaleDateString() || 'selected date'}`);
-      }
+      // No need to manually update state, the real-time listener will catch it!
     } catch (err) {
       alert('Failed to create task');
     }
   };
 
-
   const handleTaskUpdate = async (id: string, updates: Partial<Task>, dateStr?: string) => {
-    if (!dateStr) return;
-
-    // Optimistic update
-    setTasks(prev => {
-      const newDayTasks = (prev[dateStr] || []).map(t => t.id === id ? { ...t, ...updates } : t);
-      return { ...prev, [dateStr]: newDayTasks };
-    });
-
     try {
-      await updateTask(id, updates);
+      // Direct Firestore update - will be reflected via onSnapshot
+      await apiUpdateTask(id, updates);
     } catch (err) {
       console.error('Failed to update task:', err);
-      // Revert in real app (omitted for brevity)
+      alert('Failed to update task');
     }
   };
 
   const handleTaskDelete = async (id: string, dateStr?: string) => {
-    if (!dateStr) return;
-
-    setTasks(prev => {
-      const newDayTasks = (prev[dateStr] || []).filter(t => t.id !== id);
-      return { ...prev, [dateStr]: newDayTasks };
-    });
-
+    if (!confirm('Are you sure you want to delete this task?')) return;
     try {
-      await deleteTask(id);
+      await apiDeleteTask(id);
     } catch (err) {
       console.error('Failed to delete task:', err);
+      alert('Failed to delete task');
     }
   };
 
   const handleReorder = async (newTasks: Task[], dateStr: string) => {
+    // Reordering still uses the API to persist the order field in the specific day plan
     try {
       await upsertDayPlan(dateStr, { taskIds: newTasks.map(t => t.id) });
     } catch (err) {
@@ -345,15 +305,6 @@ function DashboardPage() {
         const newDate = overData.date.toISOString().split('T')[0];
         if (activeTask.plannedDate !== newDate) {
           await handleTaskUpdate(activeTask.id, { plannedDate: newDate }, activeTask.plannedDate || '');
-          setTasks(prev => {
-            const oldPrev = prev[activeTask.plannedDate || ''] || [];
-            const newPrev = prev[newDate] || [];
-            return {
-              ...prev,
-              [activeTask.plannedDate || '']: oldPrev.filter(t => t.id !== activeTask.id),
-              [newDate]: [...newPrev, { ...activeTask, plannedDate: newDate }]
-            };
-          });
         }
         return;
       }
@@ -376,13 +327,9 @@ function DashboardPage() {
 
         try {
           const created = await importNotionPage(page.id, databaseId, plannedDateTime);
-          if (created) {
-            setTasks(prev => {
-              const next = { ...prev };
-              const arr = next[plannedDate] || [];
-              return { ...next, [plannedDate]: [...arr, created] };
-            });
-          }
+          // Real-time listener will handle displaying the new task if it's a Firestore task
+          // But Notion tasks might need a manual refresh if we don't have real-time sync for them.
+          if (created) loadNotionTasks();
         } catch (err) {
           console.error('Failed to import Notion page:', err);
         }
@@ -394,9 +341,7 @@ function DashboardPage() {
         const newDate = overData.date.toISOString().split('T')[0];
         try {
           const created = await importNotionPage(page.id, databaseId, newDate);
-          if (created) {
-            setTasks(prev => ({ ...prev, [newDate]: [...(prev[newDate] || []), created] }));
-          }
+          if (created) loadNotionTasks();
         } catch (err) {
           console.error('Failed to import Notion page:', err);
         }
@@ -495,6 +440,11 @@ function DashboardPage() {
               <span className="bg-linear-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent truncate max-w-[150px] lg:max-w-none">
                 Hey {greetingName}
               </span>
+              {username && (
+                <span className="text-[9px] font-black text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded uppercase tracking-widest leading-none">
+                  @{username}
+                </span>
+              )}
               <span>👋</span>
             </h1>
           </div>
@@ -584,7 +534,6 @@ function DashboardPage() {
                           searchQuery={searchQuery}
                           onAddTask={handleSmartAddTask}
                           onReorder={(newTasks) => {
-                            setTasks(prev => ({ ...prev, [dStr]: newTasks }));
                             handleReorder(newTasks, dStr);
                           }}
                           onTaskClick={(t) => {
@@ -699,12 +648,7 @@ function DashboardPage() {
                   <NotionDatabaseBrowser
                     onPageSelect={async (page, dbId) => {
                       const task = await importNotionPage(page.id, dbId, selectedDate.toISOString().split('T')[0]);
-                      if (task) {
-                        setTasks(prev => {
-                          const dateKey = task.plannedDate || selectedDate.toISOString().split('T')[0];
-                          return { ...prev, [dateKey]: [...(prev[dateKey] || []), task] };
-                        });
-                      }
+                      if (task) loadNotionTasks();
                     }}
                     onPageDragStart={(page, dbId) => {
                       setActiveDragItem({ type: 'notion-page', page, databaseId: dbId } as any);

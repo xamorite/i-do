@@ -66,7 +66,7 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(false);
     const [connectingId, setConnectingId] = useState<string | null>(null);
     const [linkingProfile, setLinkingProfile] = useState(false);
-    const { user, loading: authLoading } = useAuth();
+    const { user, username, loading: authLoading } = useAuth();
     const router = useRouter();
 
     async function load() {
@@ -250,6 +250,13 @@ export default function SettingsPage() {
                                                 <Mail size={12} />
                                                 <p className="text-[11px] font-bold uppercase tracking-wider truncate">{user?.email}</p>
                                             </div>
+                                            {username && (
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <span className="text-[11px] font-black text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded uppercase tracking-widest">
+                                                        @{username}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 

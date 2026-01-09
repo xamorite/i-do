@@ -30,6 +30,7 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -46,10 +47,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Sync User Profile (Ensure username exists)
         try {
           const token = await firebaseUser.getIdToken();
-          fetch('/api/users/sync', {
+          const response = await fetch('/api/users/sync', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
-          }).catch(err => console.error('User sync failed', err));
+          });
+          const data = await response.json();
+          if (data.user?.username) {
+            setUsername(data.user.username);
+          }
         } catch (e) {
           console.error('Error syncing user profile', e);
         }
@@ -66,6 +71,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Remove session cookie
         document.cookie = 'session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         setUserRole(null);
+        setUsername(null);
       }
 
       setLoading(false);
@@ -97,6 +103,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const value: AuthContextType = {
     user,
     userRole,
+    username,
     loading,
     signUp,
     signIn,
