@@ -69,6 +69,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ onSelect
             case 'task_submitted': return 'Submitted task for review';
             case 'task_approved': return 'Approved your work';
             case 'task_changes_requested': return 'Requested changes';
+            case 'task_reminder': return 'Sent you a reminder';
             default: return 'New notification';
         }
     };
@@ -116,6 +117,11 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ onSelect
                                         <div className="flex-1">
                                             <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-0.5">{getMessage(n)}</p>
                                             <p className="text-sm font-medium text-gray-900 dark:text-gray-200 line-clamp-2">{n.taskTitle}</p>
+                                            {n.message && (
+                                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 italic border-l-2 border-orange-300 pl-2">
+                                                    "{n.message}"
+                                                </p>
+                                            )}
                                             <p className="text-[10px] text-gray-400 mt-1">{new Date(n.createdAt).toLocaleDateString()} • {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                         </div>
                                         {!n.read && (

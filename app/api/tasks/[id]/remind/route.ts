@@ -23,7 +23,7 @@ async function verifyToken(request: Request) {
  */
 export async function POST(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const uid = await verifyToken(request);
@@ -34,7 +34,7 @@ export async function POST(
             });
         }
 
-        const taskId = params.id;
+        const { id: taskId } = await params;
         const taskRef = adminDb.collection('tasks').doc(taskId);
         const taskDoc = await taskRef.get();
 
