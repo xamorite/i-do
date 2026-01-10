@@ -30,6 +30,11 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
   const isAP = currentUserId === task.accountabilityPartnerId;
   const isOwner = currentUserId === task.ownerId || currentUserId === task.userId;
 
+  // Check if task is overdue and has been reminded
+  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
+  const hasBeenReminded = !!task.remindedAt;
+  const isRemindedOverdue = isOverdue && hasBeenReminded && !isDone;
+
   const getStatusIcon = () => {
     if (task.status === 'pending_acceptance') return <AlertCircle className="text-yellow-500" size={18} />;
     if (task.status === 'awaiting_approval') return <Clock className="text-blue-500" size={18} />;
@@ -79,8 +84,10 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
   return (
     <div
       onClick={() => onClick?.(task)}
-      className={`group bg-white dark:bg-neutral-900 border-l-4 border-y border-r border-gray-200 dark:border-neutral-800 rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col gap-2 ${categoryStyle.borderColor} ${isDone ? 'opacity-60 grayscale' : ''}`}
-      style={{ borderLeftColor: isDone ? undefined : undefined }} // Let class handle it, or force style if needed
+      className={`group bg-white dark:bg-neutral-900 border-l-4 border-y border-r rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col gap-2 ${isRemindedOverdue
+        ? 'border-red-500 bg-red-50/50 dark:bg-red-900/10'
+        : `${categoryStyle.borderColor} border-gray-200 dark:border-neutral-800`
+        } ${isDone ? 'opacity-60 grayscale' : ''}`}
     >
       <div className="flex items-start gap-3 w-full">
         <button
@@ -141,6 +148,11 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
           {isAccountability && (
             <div className="flex items-center gap-1 text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-md" title="Accountability Active">
               <span>🤝 Partnered</span>
+            </div>
+          )}
+          {isRemindedOverdue && (
+            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded-md" title="Reminder sent">
+              <span>🔔 Reminded</span>
             </div>
           )}
         </div>

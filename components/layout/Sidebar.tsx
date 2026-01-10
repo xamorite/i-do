@@ -49,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center justify-between mb-4 px-2 lg:mb-4">
                     <div className="flex items-center gap-2">
                         <img src="https://img.icons8.com/nolan/64/reminders.png" alt="logo" className="w-6 h-6" />
-                        <span className="font-bold text-sm tracking-tight text-gray-500">i-DO</span>
+                        <span className="font-bold text-sm tracking-tight text-gray-500">DailyExpress</span>
                     </div>
                     <button
                         onClick={onClose}

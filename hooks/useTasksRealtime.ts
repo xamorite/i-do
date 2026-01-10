@@ -37,34 +37,72 @@ export function useTasksRealtime() {
 
         setLoading(true);
 
-        // Fetch all tasks for the user. 
-        // In a production app with thousands of tasks, you'd add a date range here.
-        const q = query(
+        // Keep local state for both queries to merge them
+        let ownedTasks: Task[] = [];
+        let partnerTasks: Task[] = [];
+
+        const updateMergedTasks = () => {
+            const merged = new Map<string, Task>();
+            [...ownedTasks, ...partnerTasks].forEach(t => merged.set(t.id, t));
+
+            // Sort by createdAt desc in memory
+            const sorted = Array.from(merged.values()).sort((a, b) => {
+                const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return tB - tA;
+            });
+
+            setTasks(sorted);
+            setLoading(false);
+        };
+
+        const processSnapshot = (snapshot: any): Task[] => {
+            return snapshot.docs.map((doc: any) => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+                    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+                } as Task;
+            });
+        };
+
+        // 1. Fetch Requesting Tasks (Owned)
+        const qOwned = query(
             collection(db, 'tasks'),
             where('userId', '==', user.uid),
             orderBy('createdAt', 'desc')
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const taskList: Task[] = [];
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                taskList.push({
-                    id: doc.id,
-                    ...data,
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-                    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-                } as Task);
-            });
-            setTasks(taskList);
-            setLoading(false);
+        const unsubOwned = onSnapshot(qOwned, (snapshot) => {
+            ownedTasks = processSnapshot(snapshot);
+            updateMergedTasks();
         }, (err) => {
-            console.error('[useTasksRealtime] Listener error:', err);
+            console.error('[useTasksRealtime] Owned listener error:', err);
             setError(err.message);
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        // 2. Fetch Partner Tasks (Assigned to me as accountability partner)
+        // No orderBy to avoid complex index requirements; sorting is done in memory.
+        const qPartner = query(
+            collection(db, 'tasks'),
+            where('accountabilityPartnerId', '==', user.uid)
+        );
+
+        const unsubPartner = onSnapshot(qPartner, (snapshot) => {
+            partnerTasks = processSnapshot(snapshot);
+            updateMergedTasks();
+        }, (err) => {
+            console.error('[useTasksRealtime] Partner listener error:', err);
+            // We don't block the UI if this fails (e.g. missing index, which shouldn't happen for single field)
+        });
+
+        return () => {
+            unsubOwned();
+            unsubPartner();
+        };
     }, [user]);
 
     const createTask = async (task: Partial<Task>) => {

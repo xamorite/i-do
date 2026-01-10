@@ -147,45 +147,48 @@ export async function POST(request: Request) {
       });
     }
 
-    // Validate required fields
-    if (!body.title || typeof body.title !== 'string' || body.title.trim().length === 0) {
-      return new Response(JSON.stringify({ ok: false, error: 'Task title is required' }), {
+    // Validate with Zod schema
+    const { validateSchema, taskSchema } = await import('@/lib/validation');
+    const validation = validateSchema(taskSchema, body);
+
+    if (!validation.success) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: 'Validation failed',
+        details: validation.error
+      }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+
+    // Use validated data
+    const validatedBody = validation.data;
 
     const now = new Date().toISOString();
 
-    const ownerId = body.ownerId || uid;
+    const ownerId = validatedBody.ownerId || uid;
     const isDelegated = ownerId !== uid;
-
-    if (body.accountabilityPartnerId && body.accountabilityPartnerId === ownerId) {
-      return new Response(JSON.stringify({ ok: false, error: 'Owner cannot be their own Accountability Partner' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
 
     // Calculate visibleTo
     const visibleTo = new Set<string>([uid, ownerId]);
-    if (body.accountabilityPartnerId) visibleTo.add(body.accountabilityPartnerId);
-    if (body.sharedWith) {
-      body.sharedWith.forEach((u: any) => visibleTo.add(u.userId));
+    if (validatedBody.accountabilityPartnerId) visibleTo.add(validatedBody.accountabilityPartnerId);
+    if (validatedBody.sharedWith) {
+      validatedBody.sharedWith.forEach((u: any) => visibleTo.add(u.userId));
     }
 
     // Determine initial status based on accountability rules
-    let status = body.status || 'inbox';
+    let status = validatedBody.status || 'inbox';
     if (isDelegated) {
       status = 'pending_acceptance';
     }
 
     const newTask: Partial<Task> & { visibleTo: string[] } = {
-      ...body,
+      ...validatedBody,
       userId: ownerId, // The person who has to do the task
       ownerId: ownerId,
       createdBy: uid,
-      accountabilityPartnerId: body.accountabilityPartnerId || null,
+      accountabilityPartnerId: validatedBody.accountabilityPartnerId || null,
       status: status,
       createdAt: now,
       updatedAt: now,
@@ -203,7 +206,7 @@ export async function POST(request: Request) {
         senderId: uid,
         type: 'task_assigned',
         taskId: doc.id,
-        taskTitle: body.title
+        taskTitle: validatedBody.title
       });
     }
 

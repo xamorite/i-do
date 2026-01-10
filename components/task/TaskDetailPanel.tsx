@@ -14,12 +14,15 @@ import {
   Flag,
   Repeat,
   CalendarCheck,
-  AlertTriangle
+  AlertTriangle,
+  Bell,
+  UserCircle
 } from 'lucide-react';
 import { Task, SharedUser, PartnerRelationship } from '@/lib/types';
 import { UserAutocomplete } from '@/components/partners/UserAutocomplete';
 import { getIdTokenHeader } from '@/lib/getIdToken';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { getCategoryStyles } from '@/lib/constants';
@@ -45,9 +48,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   const [notes, setNotes] = useState('');
   const [estimate, setEstimate] = useState<number | ''>('');
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [partnerProfiles, setPartnerProfiles] = useState<Record<string, string>>({}); // uid -> displayName
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [shares, setShares] = useState<SharedUser[]>([]);
+  const [reminderMessage, setReminderMessage] = useState('');
 
   // New Fields State
   const [priority, setPriority] = useState<Task['priority']>('medium');
@@ -68,6 +73,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
       setEndTime(task.endTime || '');
       setRecurrence(task.recurrencePattern || '');
       setChannel(task.channel || '');
+      setReminderMessage(''); // Reset message when task changes
       fetchShares();
     }
   }, [task]);
@@ -157,8 +163,37 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
     onUpdate(task!.id, updates, task!.plannedDate || '');
   };
 
+  const handleSendReminder = async () => {
+    try {
+      const headers = await getIdTokenHeader() as HeadersInit;
+      const res = await fetch(`/api/tasks/${task!.id}/remind`, {
+        method: 'POST',
+        headers: {
+          ...headers as any,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: reminderMessage.trim() || undefined
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Failed to send reminder', 'error');
+      } else {
+        showToast('✅ Reminder sent successfully!', 'success');
+        setReminderMessage(''); // Clear message after sending
+      }
+    } catch (err) {
+      console.error('Failed to send reminder:', err);
+      showToast('Failed to send reminder', 'error');
+    }
+  };
+
   const isDone = task.status === 'done';
   const categoryStyle = getCategoryStyles(task.channel || undefined);
+  const isAP = user?.uid === task.accountabilityPartnerId;
+  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
+  const canSendReminder = isAP && isOverdue && !isDone;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -448,6 +483,55 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                           </button>
                         </div>
                       )}
+                      {/* Reminder Button for AP when task is overdue */}
+                      {canSendReminder && (
+                        <div className="mt-2 space-y-2">
+                          {task.remindedAt && (() => {
+                            const hoursSince = Math.floor((new Date().getTime() - new Date(task.remindedAt).getTime()) / (1000 * 60 * 60));
+                            const canSendAgain = hoursSince >= 24;
+
+                            return (
+                              <p className="text-[10px] text-gray-500 text-center">
+                                {canSendAgain
+                                  ? `Last reminded ${hoursSince}h ago`
+                                  : `⏳ Wait ${24 - hoursSince}h to remind again`
+                                }
+                              </p>
+                            );
+                          })()}
+
+                          {/* Custom Message Input */}
+                          <div>
+                            <label className="block text-[10px] font-medium text-gray-600 dark:text-gray-400 mb-1">
+                              Add a personal note (optional)
+                            </label>
+                            <textarea
+                              value={reminderMessage}
+                              onChange={(e) => {
+                                if (e.target.value.length <= 200) {
+                                  setReminderMessage(e.target.value);
+                                }
+                              }}
+                              placeholder="e.g., Hey! Just a friendly reminder about this task..."
+                              className="w-full text-xs p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-neutral-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                              rows={2}
+                              maxLength={200}
+                            />
+                            <p className="text-[9px] text-gray-400 text-right mt-0.5">
+                              {reminderMessage.length}/200
+                            </p>
+                          </div>
+
+                          <button
+                            onClick={handleSendReminder}
+                            className="w-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 py-1.5 rounded hover:bg-orange-200 flex items-center justify-center gap-2 transition-colors"
+                            title="Send reminder to task owner"
+                          >
+                            <Bell size={14} />
+                            Send Reminder
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -548,8 +632,21 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
           </div>
 
           {/* Footer */}
-          <div className="p-4 border-t border-gray-100 dark:border-neutral-800 text-center">
-            <div className="text-[10px] text-gray-400">
+          <div className="p-4 border-t border-gray-100 dark:border-neutral-800">
+            {/* Partner Profile Display */}
+            {task.accountabilityPartnerId && (
+              <div className="flex items-center gap-2 mb-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <UserCircle size={16} className="text-purple-600 dark:text-purple-400" />
+                <div className="flex-1">
+                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase block">Partnered with</span>
+                  <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                    {partnerProfiles[task.accountabilityPartnerId] || task.accountabilityPartnerId}
+                  </span>
+                </div>
+                <span className="text-lg">🤝</span>
+              </div>
+            )}
+            <div className="text-[10px] text-gray-400 text-center">
               {task.updatedAt ? `Last updated ${new Date(task.updatedAt).toLocaleString()}` : 'New task'}
             </div>
           </div>

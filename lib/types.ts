@@ -70,6 +70,8 @@ export interface Task {
   createdBy?: string; // The user who created the task
   accountabilityPartnerId?: string | null; // The user who verifies completion
   rejectionReason?: string;
+  remindedAt?: string | null; // Timestamp when last reminded by AP
+  lastRemindedBy?: string | null; // User ID who sent the last reminder
 
   status:
   | 'inbox'
@@ -128,9 +130,10 @@ export interface Notification {
   id: string;
   recipientId: string;
   senderId: string;
-  type: 'task_assigned' | 'task_accepted' | 'task_rejected' | 'task_submitted' | 'task_approved' | 'task_changes_requested';
+  type: 'task_assigned' | 'task_accepted' | 'task_rejected' | 'task_submitted' | 'task_approved' | 'task_changes_requested' | 'task_reminder';
   taskId: string;
   taskTitle: string;
+  message?: string; // Optional custom message (used for reminders)
   read: boolean;
   createdAt: string;
 }

@@ -3,9 +3,10 @@ import { adminDb } from '@/lib/firebaseAdmin';
 export async function createNotification(notification: {
     recipientId: string;
     senderId: string;
-    type: 'task_assigned' | 'task_accepted' | 'task_rejected' | 'task_submitted' | 'task_approved' | 'task_changes_requested';
+    type: 'task_assigned' | 'task_accepted' | 'task_rejected' | 'task_submitted' | 'task_approved' | 'task_changes_requested' | 'task_reminder';
     taskId: string;
     taskTitle: string;
+    message?: string;
 }) {
     if (!notification.recipientId || notification.recipientId === notification.senderId) {
         return; // Don't notify self or if no recipient

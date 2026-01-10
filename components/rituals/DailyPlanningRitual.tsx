@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { X, ArrowRight, Check, Calendar, Clock, Layout } from 'lucide-react';
+import { X, ArrowRight, Check, Calendar, Clock, Layout, Circle, CheckCircle2 } from 'lucide-react';
 import { Task } from '@/lib/types';
 
 interface DailyPlanningRitualProps {
@@ -108,57 +108,257 @@ export const DailyPlanningRitual: React.FC<DailyPlanningRitualProps> = ({
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 dark:bg-gray-900">
                     <div className="max-w-3xl mx-auto">
 
-                        {step === 'review' && (
-                            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                <div className="text-center mb-8">
-                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Review Yesterday</h3>
-                                    <p className="text-gray-500">Check off what you finished. We'll archive the rest.</p>
-                                </div>
-                                {/* TODO: List yesterday's tasks here */}
-                                <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
-                                    Placeholder: Yesterday's Task List
-                                </div>
-                            </div>
-                        )}
+                        {step === 'review' && (() => {
+                            // Get yesterday's date
+                            const yesterday = new Date(date);
+                            yesterday.setDate(yesterday.getDate() - 1);
+                            const yesterdayKey = yesterday.toISOString().split('T')[0];
+                            const yesterdayTasks = tasks[yesterdayKey] || [];
 
-                        {step === 'plan' && (
-                            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                <div className="text-center mb-8">
-                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Fill Your Day</h3>
-                                    <p className="text-gray-500">What are your top priorities for today?</p>
-                                </div>
-                                {/* TODO: Add tasks from backlog/input */}
-                                <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
-                                    Placeholder: Add/Select Tasks Interface
-                                </div>
-                            </div>
-                        )}
+                            const completed = yesterdayTasks.filter(t => t.status === 'done').length;
+                            const total = yesterdayTasks.length;
 
-                        {step === 'estimate' && (
-                            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                <div className="text-center mb-8">
-                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Estimate Time</h3>
-                                    <p className="text-gray-500">How long will each task take? Be realistic.</p>
-                                </div>
-                                {/* TODO: Time estimation inputs for each task */}
-                                <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
-                                    Placeholder: Task List with Time Inputs
-                                </div>
-                            </div>
-                        )}
+                            return (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <div className="text-center mb-8">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Review Yesterday</h3>
+                                        <p className="text-gray-500">Check off what you finished. We'll archive the rest.</p>
+                                        {total > 0 && (
+                                            <p className="mt-2 text-sm font-medium text-purple-600">
+                                                {completed} of {total} completed
+                                            </p>
+                                        )}
+                                    </div>
 
-                        {step === 'timebox' && (
-                            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                <div className="text-center mb-8">
-                                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Timebox</h3>
-                                    <p className="text-gray-500">Drag your tasks onto the calendar to lock them in.</p>
+                                    {yesterdayTasks.length === 0 ? (
+                                        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                            No tasks from yesterday
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {yesterdayTasks.map(task => (
+                                                <div
+                                                    key={task.id}
+                                                    className="bg-white dark:bg-gray-800 rounded-lg p-4 flex items-center gap-3 border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow"
+                                                >
+                                                    <button
+                                                        onClick={() => {
+                                                            const newStatus = task.status === 'done' ? 'planned' : 'done';
+                                                            onUpdateTask(task.id, { status: newStatus }, yesterdayKey);
+                                                        }}
+                                                        className="flex-shrink-0"
+                                                    >
+                                                        {task.status === 'done' ? (
+                                                            <CheckCircle2 className="text-green-500" size={20} />
+                                                        ) : (
+                                                            <Circle className="text-gray-400" size={20} />
+                                                        )}
+                                                    </button>
+                                                    <div className="flex-1">
+                                                        <p className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                                                            {task.title}
+                                                        </p>
+                                                        {task.estimateMinutes && (
+                                                            <p className="text-xs text-gray-500 mt-1">
+                                                                {Math.floor(task.estimateMinutes / 60)}h {task.estimateMinutes % 60}m
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                                {/* TODO: Split view with tasks and calendar */}
-                                <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
-                                    Placeholder: Drag and Drop Calendar View
+                            );
+                        })()}
+
+                        {step === 'plan' && (() => {
+                            const todayKey = date.toISOString().split('T')[0];
+                            const todayTasks = tasks[todayKey] || [];
+
+                            // Get inbox/backlog tasks (tasks not planned for today)
+                            const availableTasks = Object.values(tasks).flat().filter(t =>
+                                (t.status === 'inbox' || t.status === 'backlog') &&
+                                t.plannedDate !== todayKey
+                            );
+
+                            return (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <div className="text-center mb-8">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Fill Your Day</h3>
+                                        <p className="text-gray-500">What are your top priorities for today?</p>
+                                        <p className="mt-2 text-sm font-medium text-purple-600">
+                                            {todayTasks.length} tasks planned
+                                        </p>
+                                    </div>
+
+                                    {availableTasks.length === 0 ? (
+                                        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                            No tasks in inbox or backlog. Add tasks from the dashboard!
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                Click to add to today:
+                                            </p>
+                                            {availableTasks.slice(0, 10).map(task => (
+                                                <div
+                                                    key={task.id}
+                                                    onClick={() => {
+                                                        onUpdateTask(task.id, {
+                                                            plannedDate: todayKey,
+                                                            status: 'planned'
+                                                        });
+                                                    }}
+                                                    className="bg-white dark:bg-gray-800 rounded-lg p-4 flex items-center gap-3 border border-gray-200 dark:border-gray-700 hover:bg-purple-50 dark:hover:bg-purple-900/20 cursor-pointer transition-all hover:shadow-md"
+                                                >
+                                                    <Circle className="text-gray-400 flex-shrink-0" size={20} />
+                                                    <div className="flex-1">
+                                                        <p className="font-medium text-gray-900 dark:text-white">
+                                                            {task.title}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            {task.channel || 'No category'}
+                                                        </p>
+                                                    </div>
+                                                    <ArrowRight className="text-purple-500 flex-shrink-0" size={16} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
+
+                        {step === 'estimate' && (() => {
+                            const todayKey = date.toISOString().split('T')[0];
+                            const todayTasks = tasks[todayKey] || [];
+
+                            const totalMinutes = todayTasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0);
+                            const hours = Math.floor(totalMinutes / 60);
+                            const mins = totalMinutes % 60;
+
+                            return (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <div className="text-center mb-8">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Estimate Time</h3>
+                                        <p className="text-gray-500">How long will each task take? Be realistic.</p>
+                                        <p className="mt-2 text-sm font-medium text-purple-600">
+                                            Total: {hours}h {mins}m {totalMinutes > 480 && <span className="text-orange-500">(⚠️ Over 8 hours)</span>}
+                                        </p>
+                                    </div>
+
+                                    {todayTasks.length === 0 ? (
+                                        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                            No tasks planned for today. Add some in the previous step!
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {todayTasks.map(task => {
+                                                const estimateHours = Math.floor((task.estimateMinutes || 0) / 60);
+                                                const estimateMins = (task.estimateMinutes || 0) % 60;
+
+                                                return (
+                                                    <div
+                                                        key={task.id}
+                                                        className="bg-white dark:bg-gray-800 rounded-lg p-4 flex items-center gap-3 border border-gray-200 dark:border-gray-700"
+                                                    >
+                                                        <div className="flex-1">
+                                                            <p className="font-medium text-gray-900 dark:text-white mb-2">
+                                                                {task.title}
+                                                            </p>
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    max="23"
+                                                                    value={estimateHours}
+                                                                    onChange={(e) => {
+                                                                        const newHours = parseInt(e.target.value) || 0;
+                                                                        const newMinutes = newHours * 60 + estimateMins;
+                                                                        onUpdateTask(task.id, { estimateMinutes: newMinutes }, todayKey);
+                                                                    }}
+                                                                    className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                                    placeholder="0"
+                                                                />
+                                                                <span className="text-sm text-gray-500">h</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    max="59"
+                                                                    step="15"
+                                                                    value={estimateMins}
+                                                                    onChange={(e) => {
+                                                                        const newMins = parseInt(e.target.value) || 0;
+                                                                        const newMinutes = estimateHours * 60 + newMins;
+                                                                        onUpdateTask(task.id, { estimateMinutes: newMinutes }, todayKey);
+                                                                    }}
+                                                                    className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                                    placeholder="0"
+                                                                />
+                                                                <span className="text-sm text-gray-500">m</span>
+                                                            </div>
+                                                        </div>
+                                                        <Clock className="text-gray-400" size={20} />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {step === 'timebox' && (() => {
+                            const todayKey = date.toISOString().split('T')[0];
+                            const todayTasks = tasks[todayKey] || [];
+
+                            return (
+                                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <div className="text-center mb-8">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Timebox</h3>
+                                        <p className="text-gray-500">Drag your tasks onto the calendar to lock them in.</p>
+                                        <p className="mt-2 text-sm text-purple-600">
+                                            {todayTasks.length} tasks ready to schedule
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl p-8 border-2 border-purple-200 dark:border-purple-700">
+                                        <div className="text-center">
+                                            <Calendar className="mx-auto text-purple-600 dark:text-purple-400 mb-4" size={48} />
+                                            <h4 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                                                Time Blocking Coming Soon!
+                                            </h4>
+                                            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                                This step will integrate with your calendar to help you schedule exact time blocks for each task.
+                                            </p>
+                                            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 max-w-md mx-auto">
+                                                <p className="text-xs text-gray-500 mb-3">
+                                                    <strong>Your planned tasks:</strong>
+                                                </p>
+                                                {todayTasks.length === 0 ? (
+                                                    <p className="text-sm text-gray-400">No tasks planned yet</p>
+                                                ) : (
+                                                    <ul className="space-y-2 text-left">
+                                                        {todayTasks.map(task => (
+                                                            <li key={task.id} className="text-sm flex items-center gap-2">
+                                                                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                                                                <span className="text-gray-900 dark:text-white">{task.title}</span>
+                                                                {task.estimateMinutes && (
+                                                                    <span className="text-xs text-gray-500 ml-auto">
+                                                                        ({Math.floor(task.estimateMinutes / 60)}h {task.estimateMinutes % 60}m)
+                                                                    </span>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                     </div>
                 </div>
