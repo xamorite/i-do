@@ -8,6 +8,7 @@ import { TaskInput } from '@/components/task/TaskInput';
 import { Plus } from 'lucide-react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
+import { getCategoryStyles } from '@/lib/constants';
 
 interface DayColumnProps {
     date: Date;
@@ -19,6 +20,7 @@ interface DayColumnProps {
     onStatusToggle: (task: Task) => void;
     currentUserId?: string;
     onAction?: (task: Task, action: string) => void;
+    userProfiles?: Record<string, any>;
 }
 
 export const DayColumn: React.FC<DayColumnProps> = ({
@@ -30,7 +32,8 @@ export const DayColumn: React.FC<DayColumnProps> = ({
     onTaskClick,
     onStatusToggle,
     currentUserId,
-    onAction
+    onAction,
+    userProfiles
 }) => {
     const { setNodeRef, isOver } = useDroppable({
         id: `column-${date.toISOString().split('T')[0]}`,
@@ -55,6 +58,19 @@ export const DayColumn: React.FC<DayColumnProps> = ({
         t.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    // Category distribution
+    const categoryCounts: Record<string, number> = {};
+    displayTasks.forEach(t => {
+        const cat = t.channel || 'default';
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+
+    const categoryStats = Object.entries(categoryCounts).map(([cat, count]) => ({
+        cat,
+        percent: (count / displayTasks.length) * 100,
+        style: getCategoryStyles(cat === 'default' ? undefined : cat)
+    })).sort((a, b) => b.percent - a.percent);
+
     return (
         <div ref={setNodeRef} className={`flex flex-col w-full min-w-[300px] lg:w-80 flex-shrink-0 h-full bg-white dark:bg-neutral-900 border-r border-gray-100 dark:border-neutral-800 transition-colors ${isOver ? 'bg-purple-50/50 dark:bg-purple-900/5' : ''}`}>
             {/* Header */}
@@ -68,6 +84,20 @@ export const DayColumn: React.FC<DayColumnProps> = ({
                 <div className="mt-4 h-1.5 w-full bg-gray-100 dark:bg-neutral-800 rounded-full overflow-hidden">
                     <div ref={(el) => { if (el) el.style.width = `${progress}%`; }} className="h-full bg-purple-500 transition-all duration-500" />
                 </div>
+
+                {/* Category Distribution Bar */}
+                {displayTasks.length > 0 && (
+                    <div className="mt-2 flex h-1 w-full rounded-full overflow-hidden opacity-60">
+                        {categoryStats.map(stat => (
+                            <div
+                                key={stat.cat}
+                                style={{ width: `${stat.percent}%` }}
+                                className={stat.style.color.replace('text-', 'bg-')}
+                                title={`${stat.style.label}: ${Math.round(stat.percent)}%`}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Task List Section */}
@@ -94,6 +124,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
                                 onStatusToggle={onStatusToggle}
                                 currentUserId={currentUserId}
                                 onAction={onAction}
+                                userProfiles={userProfiles}
                             />
                         ))}
                     </div>

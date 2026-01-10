@@ -58,13 +58,17 @@ import { IntegrationRail } from '@/components/layout/IntegrationRail';
 import { DayColumn } from '@/components/task/DayColumn';
 import { CalendarGrid } from '@/components/calendar/CalendarGrid';
 import { UserMenu } from '@/components/layout/UserMenu';
-import { NotionDatabaseBrowser } from '@/components/integrations/NotionDatabaseBrowser';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { IntegrationSidebar } from '@/components/dashboard/IntegrationSidebar';
+import { TaskColumnsView } from '@/components/dashboard/TaskColumnsView';
+import { useTaskDragDrop } from '@/hooks/useTaskDragDrop';
+import { useIntegrationManager } from '@/hooks/useIntegrationManager';
 import { PartnerManager } from '@/components/partners/PartnerManager';
 import { usePartnersRealtime } from '@/hooks/usePartnersRealtime';
+import { useUserProfiles } from '@/hooks/useUserProfiles';
 import { PartnerRelationship } from '@/lib/types';
 
 function DashboardPage() {
@@ -83,34 +87,73 @@ function DashboardPage() {
   // Real-time partners for accountability features
   const { partners } = usePartnersRealtime();
 
-  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
-  const [slackMessages, setSlackMessages] = useState<any[]>([]);
-  const [notionTasks, setNotionTasks] = useState<Task[]>([]);
+  // State
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [isCalendarLoading, setIsCalendarLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentView, setCurrentView] = useState<'home' | 'today' | 'week' | 'month'>('home');
   const [activeIntegration, setActiveIntegration] = useState<string | null>('google-calendar');
   const [isRightPaneOpen, setIsRightPaneOpen] = useState(true);
   const [visibleSources, setVisibleSources] = useState<Set<string>>(new Set(['google', 'notion', 'slack', 'task']));
 
+  // Integration Hook
+  const {
+    calendarEvents,
+    slackMessages,
+    notionTasks,
+    isCalendarLoading,
+    loadCalendarEvents,
+    loadSlackMessages,
+    loadNotionTasks
+  } = useIntegrationManager(selectedDate, currentView, visibleSources);
+
   // Compute grouped tasks from the real-time flat array
-  const tasks = React.useMemo(() => {
-    const grouped: Record<string, Task[]> = {};
+  const handleTaskUpdate = async (id: string, updates: Partial<Task>, dateStr?: string) => {
+    try {
+      // Direct Firestore update - will be reflected via onSnapshot
+      await apiUpdateTask(id, updates);
+    } catch (err) {
+      console.error('Failed to update task:', err);
+      alert('Failed to update task');
+    }
+  };
 
-    // Mix in Notion tasks if they exist
-    const combined = [...allTasks, ...notionTasks];
+  const handleDragCreate = async (task: { title: string, date?: Date, startTime?: string, endTime?: string, isTimeboxed?: boolean }) => {
+    try {
+      const taskData: any = {
+        title: task.title,
+        status: 'planned',
+      };
 
-    combined.forEach(task => {
-      const dateKey = task.plannedDate || 'backlog';
-      if (!grouped[dateKey]) grouped[dateKey] = [];
-      grouped[dateKey].push(task);
-    });
-    return grouped;
-  }, [allTasks, notionTasks]);
+      if (task.date) {
+        taskData.plannedDate = task.date.toISOString().split('T')[0];
+      } else {
+        taskData.status = 'inbox';
+      }
+
+      if (task.isTimeboxed) {
+        taskData.isTimeboxed = true;
+        taskData.startTime = task.startTime;
+        taskData.endTime = task.endTime;
+      }
+
+      await apiCreateTask(taskData);
+    } catch (err) {
+      console.error('Failed to create task from drag:', err);
+      alert('Failed to create task');
+    }
+  };
+
+  const handleReorder = async (newTasks: Task[], dateStr: string) => {
+    // Reordering still uses the API to persist the order field in the specific day plan
+    try {
+      await upsertDayPlan(dateStr, { taskIds: newTasks.map(t => t.id) });
+    } catch (err) {
+      console.error('Failed to persist order:', err);
+    }
+  };
 
   const toggleSource = (source: string) => {
     setVisibleSources(prev => {
@@ -125,13 +168,15 @@ function DashboardPage() {
   const [isPlanningOpen, setIsPlanningOpen] = useState(false);
   const [isPartnerManagerOpen, setIsPartnerManagerOpen] = useState(false);
 
-  // DnD State (can be existing Task or external NotionPage)
-  const [activeDragItem, setActiveDragItem] = useState<any | null>(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  // DnD Hook
+  const {
+    activeDragItem,
+    setActiveDragItem,
+    sensors,
+    handleDragStart,
+    handleDragOver,
+    handleDragEnd
+  } = useTaskDragDrop(handleTaskUpdate, loadNotionTasks, handleDragCreate);
 
   // We show Today and Tomorrow for now
   const today = new Date();
@@ -145,97 +190,87 @@ function DashboardPage() {
     : [today];
 
   useEffect(() => {
-    loadCalendarEvents();
-    loadSlackMessages();
-    if (visibleSources.has('notion')) {
-      loadNotionTasks();
-    }
+    // Other effects if any
   }, [selectedDate, currentView, visibleSources]);
 
-  // Method Definitions
-  const loadCalendarEvents = async () => {
-    setIsCalendarLoading(true);
-    try {
-      let start: Date;
-      let end: Date;
+  // Compute grouped tasks from the real-time flat array
+  const tasks = React.useMemo(() => {
+    const grouped: Record<string, Task[]> = {
+      inbox: [], // Initialize inbox array
+    };
 
-      if (currentView === 'week') {
-        const monday = new Date(selectedDate);
-        const day = monday.getDay();
-        const diff = monday.getDate() - day + (day === 0 ? -6 : 1);
-        monday.setDate(diff);
-        monday.setHours(0, 0, 0, 0);
-        start = monday;
-        end = new Date(monday);
-        end.setDate(monday.getDate() + 6);
-        end.setHours(23, 59, 59, 999);
-      } else if (currentView === 'month') {
-        const monthStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-        const startDay = monthStart.getDay();
-        const gridStart = new Date(monthStart);
-        gridStart.setDate(gridStart.getDate() - (startDay === 0 ? 6 : startDay - 1));
-        gridStart.setHours(0, 0, 0, 0);
-        start = gridStart;
-        end = new Date(gridStart);
-        end.setDate(gridStart.getDate() + 41);
-        end.setHours(23, 59, 59, 999);
+    // Mix in Notion tasks if they exist
+    const combined = [...allTasks, ...notionTasks];
+
+    combined.forEach(task => {
+      // Tasks with inbox/backlog status or no planned date go to inbox
+      if (task.status === 'inbox' || task.status === 'backlog' || !task.plannedDate) {
+        grouped.inbox.push(task);
       } else {
-        start = new Date(selectedDate);
-        start.setHours(0, 0, 0, 0);
-        end = new Date(selectedDate);
-        end.setHours(23, 59, 59, 999);
+        // Regular tasks grouped by planned date
+        const dateKey = task.plannedDate;
+        if (!grouped[dateKey]) grouped[dateKey] = [];
+        grouped[dateKey].push(task);
       }
+    });
+    return grouped;
+  }, [allTasks, notionTasks]);
 
-      const events = await fetchCalendarEvents(start.toISOString(), end.toISOString());
-      setCalendarEvents(events);
-    } catch (err) {
-      console.error('Failed to load calendar events:', err);
-    } finally {
-      setIsCalendarLoading(false);
-    }
-  };
+  // Collect unique UIDs for profile fetching
+  const userUids = React.useMemo(() => {
+    const uids = new Set<string>();
+    if (user?.uid) uids.add(user.uid);
 
-  const loadSlackMessages = async () => {
-    try {
-      const msgs = await fetchSlackMessages();
-      setSlackMessages(msgs);
-    } catch (err) {
-      console.error('Failed to load Slack messages:', err);
-    }
-  };
+    // UIDs from tasks
+    allTasks.forEach(task => {
+      if (task.ownerId) uids.add(task.ownerId);
+      if (task.accountabilityPartnerId) uids.add(task.accountabilityPartnerId);
+      if (task.createdBy) uids.add(task.createdBy);
+      if (task.userId) uids.add(task.userId);
+    });
 
-  const loadNotionTasks = async () => {
-    try {
-      const msgs = await fetchNotionTasks();
-      setNotionTasks(msgs || []);
-    } catch (err) {
-      console.error('Failed to load Notion tasks:', err);
-    }
+    // UIDs from partners
+    partners.forEach(p => {
+      uids.add(p.requesterId);
+      uids.add(p.recipientId);
+    });
+
+    return Array.from(uids);
+  }, [user?.uid, allTasks, partners]);
+
+  const { profiles } = useUserProfiles(userUids);
+
+  // Method Definitions
+  const loadNotionTasksLocal = async () => {
+    await loadNotionTasks();
   }
 
   const handleSmartAddTask = async (val: { title: string, channel?: string, estimate?: number, date?: Date }) => {
     try {
-      const taskDate = val.date ? val.date.toISOString().split('T')[0] : selectedDate.toISOString().split('T')[0];
-      await apiCreateTask({
+      // If no date provided, create as inbox task (unplanned)
+      // Otherwise, create as planned task for the specified date
+      const taskData: any = {
         title: val.title,
-        plannedDate: taskDate,
-        status: 'planned',
-        channel: val.channel,
-        estimateMinutes: val.estimate,
-      });
+      };
+
+      // Only add optional fields if they have values (Firebase doesn't allow undefined)
+      if (val.channel) taskData.channel = val.channel;
+      if (val.estimate) taskData.estimateMinutes = val.estimate;
+
+      if (val.date) {
+        // Planned task with specific date
+        taskData.plannedDate = val.date.toISOString().split('T')[0];
+        taskData.status = 'planned';
+      } else {
+        // Inbox task - no planned date
+        taskData.status = 'inbox';
+      }
+
+      await apiCreateTask(taskData);
       // No need to manually update state, the real-time listener will catch it!
     } catch (err) {
+      console.error('Failed to create task:', err);
       alert('Failed to create task');
-    }
-  };
-
-  const handleTaskUpdate = async (id: string, updates: Partial<Task>, dateStr?: string) => {
-    try {
-      // Direct Firestore update - will be reflected via onSnapshot
-      await apiUpdateTask(id, updates);
-    } catch (err) {
-      console.error('Failed to update task:', err);
-      alert('Failed to update task');
     }
   };
 
@@ -249,113 +284,8 @@ function DashboardPage() {
     }
   };
 
-  const handleReorder = async (newTasks: Task[], dateStr: string) => {
-    // Reordering still uses the API to persist the order field in the specific day plan
-    try {
-      await upsertDayPlan(dateStr, { taskIds: newTasks.map(t => t.id) });
-    } catch (err) {
-      console.error('Failed to persist order:', err);
-    }
-  };
-
   const handleIntegrationToggle = (id: string) => {
     setActiveIntegration(prev => prev === id ? null : id);
-  };
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const data = active.data.current;
-    setActiveDragItem(data || null);
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeId = active.id;
-    const overId = over.id;
-
-    // TODO: Handle cross-column dragging logic if needed here for sorting
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveDragItem(null);
-    if (!over) return;
-
-    const activeData = active.data.current;
-    const overData = over.data.current;
-
-    // If dragging an existing internal task
-    if (activeData?.type === 'Task') {
-      const activeTask = activeData.task as Task;
-
-      // Drop on Calendar Slot -> timebox
-      if (overData?.type === 'CalendarSlot') {
-        const { hour, date } = overData;
-        const plannedDate = date.toISOString().split('T')[0];
-        const startTime = new Date(date);
-        startTime.setHours(hour, 0, 0, 0);
-        const endTime = new Date(startTime);
-        endTime.setHours(hour + 1);
-
-        await handleTaskUpdate(activeTask.id, {
-          plannedDate,
-          isTimeboxed: true,
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-        }, activeTask.plannedDate || '');
-        return;
-      }
-
-      // Drop on Day column -> change date
-      if (overData?.type === 'DayColumn') {
-        const newDate = overData.date.toISOString().split('T')[0];
-        if (activeTask.plannedDate !== newDate) {
-          await handleTaskUpdate(activeTask.id, { plannedDate: newDate }, activeTask.plannedDate || '');
-        }
-        return;
-      }
-
-      return;
-    }
-
-    // If dragging a Notion page
-    if (activeData?.type === 'NotionPage') {
-      const { page, databaseId } = activeData;
-
-      // Drop on Calendar Slot -> import and timebox
-      if (overData?.type === 'CalendarSlot') {
-        const { hour, date } = overData;
-        const plannedDate = date.toISOString().split('T')[0];
-        // Use ISO with time when importing
-        const startTime = new Date(date);
-        startTime.setHours(hour, 0, 0, 0);
-        const plannedDateTime = startTime.toISOString();
-
-        try {
-          const created = await importNotionPage(page.id, databaseId, plannedDateTime);
-          // Real-time listener will handle displaying the new task if it's a Firestore task
-          // But Notion tasks might need a manual refresh if we don't have real-time sync for them.
-          if (created) loadNotionTasks();
-        } catch (err) {
-          console.error('Failed to import Notion page:', err);
-        }
-        return;
-      }
-
-      // Drop on Day column -> import without time
-      if (overData?.type === 'DayColumn') {
-        const newDate = overData.date.toISOString().split('T')[0];
-        try {
-          const created = await importNotionPage(page.id, databaseId, newDate);
-          if (created) loadNotionTasks();
-        } catch (err) {
-          console.error('Failed to import Notion page:', err);
-        }
-        return;
-      }
-    }
   };
 
   const changeDate = (direction: number) => {
@@ -379,17 +309,69 @@ function DashboardPage() {
     || user?.email?.split('@')[0]
     || 'User';
 
+  /* Notification Helper */
+  const createNotification = async (notification: {
+    recipientId: string | undefined;
+    type: 'task_assigned' | 'task_accepted' | 'task_rejected' | 'task_submitted' | 'task_approved' | 'task_changes_requested';
+    taskId: string;
+    taskTitle: string;
+    message?: string;
+  }) => {
+    if (!notification.recipientId || notification.recipientId === user?.uid) return;
+
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...notification,
+          senderId: user?.uid,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to create notification', err);
+    }
+  };
+
   const handleAccountabilityAction = async (task: Task, action: string) => {
     const dStr = task.plannedDate || selectedDate.toISOString().split('T')[0];
 
     if (action === 'accept') {
       await handleTaskUpdate(task.id, { status: 'planned', userId: user?.uid, ownerId: user?.uid }, dStr);
+      await createNotification({
+        recipientId: task.createdBy, // Notify the delegator
+        type: 'task_accepted',
+        taskId: task.id,
+        taskTitle: task.title,
+        message: `${greetingName} accepted your task`
+      });
     } else if (action === 'reject') {
       await handleTaskUpdate(task.id, { status: 'rejected' }, dStr);
+      await createNotification({
+        recipientId: task.createdBy, // Notify the delegator
+        type: 'task_rejected',
+        taskId: task.id,
+        taskTitle: task.title,
+        message: `${greetingName} rejected your task`
+      });
     } else if (action === 'submit') {
       await handleTaskUpdate(task.id, { status: 'awaiting_approval' }, dStr);
+      await createNotification({
+        recipientId: task.accountabilityPartnerId!, // Notify the partner
+        type: 'task_submitted',
+        taskId: task.id,
+        taskTitle: task.title,
+        message: `${greetingName} submitted a task for approval`
+      });
     } else if (action === 'approve') {
       await handleTaskUpdate(task.id, { status: 'done' }, dStr);
+      await createNotification({
+        recipientId: task.ownerId!, // Notify the owner
+        type: 'task_approved',
+        taskId: task.id,
+        taskTitle: task.title,
+        message: `Task approved by ${greetingName}`
+      });
     }
   };
 
@@ -460,6 +442,7 @@ function DashboardPage() {
           setIsPlanningOpen={setIsPlanningOpen}
           visibleSources={visibleSources}
           toggleSource={toggleSource}
+          inboxCount={tasks.inbox?.length || 0}
         />
 
         {/* Multi-column center area */}
@@ -470,191 +453,38 @@ function DashboardPage() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <section className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-neutral-900 border-l border-gray-100 dark:border-neutral-900">
-            {/* View Header with Date */}
-            <div className="px-4 lg:px-8 py-4 lg:py-6 border-b border-gray-50 dark:border-neutral-800/50 flex items-center justify-between">
-              <h2 className="text-lg lg:text-xl font-black text-gray-900 dark:text-gray-100">
-                {currentView === 'month'
-                  ? selectedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-                  : selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-              </h2>
-            </div>
+          <TaskColumnsView
+            currentView={currentView}
+            selectedDate={selectedDate}
+            datesToShow={datesToShow}
+            tasks={tasks}
+            visibleSources={visibleSources}
+            searchQuery={searchQuery}
+            calendarEvents={calendarEvents}
+            user={user}
+            onAddTask={handleSmartAddTask}
+            onReorder={handleReorder}
+            onTaskClick={(t) => {
+              setSelectedTask(t);
+              setIsDetailOpen(true);
+            }}
+            onTaskUpdate={handleTaskUpdate}
+            onAction={handleAccountabilityAction}
+            userProfiles={profiles}
+          />
 
-            <div className="flex-1 flex overflow-hidden relative">
-              {currentView === 'home' || currentView === 'today' ? (
-                <div className="flex-1 flex overflow-x-auto custom-scrollbar snap-x snap-mandatory lg:snap-none">
-                  {datesToShow.map((d) => {
-                    // Mobile: only show selected date if in "home" view? 
-                    // Or allow scrolling. "Day view" usually implies one day.
-                    // For now, let's allow scrolling but snap to days.
-                    // If narrow screen, maybe we only want to render 1 day to save memory/perf?
-                    // But scrolling horizontally is nice.
-                    const dStr = d.toISOString().split('T')[0];
-                    return (
-                      <div key={dStr} className="snap-center h-full flex-shrink-0 w-full lg:w-auto">
-                        <DayColumn
-                          date={d}
-                          tasks={(tasks[dStr] || []).filter(t => {
-                            const source = t.originalIntegration?.split('-')[0] || 'task';
-                            return visibleSources.has(source);
-                          })}
-                          searchQuery={searchQuery}
-                          onAddTask={handleSmartAddTask}
-                          onReorder={(newTasks) => {
-                            handleReorder(newTasks, dStr);
-                          }}
-                          onTaskClick={(t) => {
-                            setSelectedTask(t);
-                            setIsDetailOpen(true);
-                          }}
-                          onStatusToggle={(t) => handleTaskUpdate(t.id, { status: t.status === 'done' ? 'planned' : 'done' }, dStr)}
-                          currentUserId={user?.uid}
-                          onAction={handleAccountabilityAction}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : currentView === 'week' ? (
-                <div className="flex-1 overflow-auto">
-                  <WeeklyCalendar
-                    date={selectedDate}
-                    events={calendarEvents.filter(e => visibleSources.has(e.type || e.originalIntegration?.split('-')[0] || 'google'))}
-                    tasks={Object.values(tasks).flat().filter(t => {
-                      const source = t.originalIntegration?.split('-')[0] || 'task';
-                      return visibleSources.has(source);
-                    })}
-                  />
-                </div>
-              ) : (
-                <div className="flex-1 overflow-auto">
-                  <MonthlyCalendar
-                    date={selectedDate}
-                    events={calendarEvents.filter(e => visibleSources.has(e.type || e.originalIntegration?.split('-')[0] || 'google'))}
-                    tasks={Object.values(tasks).flat().filter(t => {
-                      const source = t.originalIntegration?.split('-')[0] || 'task';
-                      return visibleSources.has(source);
-                    })}
-                  />
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Right Sidebar - Dynamic Integration Content (Mobile Overlay) */}
-          <div className={`
-             fixed inset-y-0 right-0 z-40 w-full sm:w-96 bg-white dark:bg-neutral-900 shadow-2xl transform transition-transform duration-300 ease-in-out
-             lg:relative lg:translate-x-0 lg:shadow-none lg:border-l lg:border-gray-100 lg:dark:border-neutral-900 lg:z-0
-             ${isRightPaneOpen ? 'translate-x-0' : 'translate-x-full lg:hidden'}
-          `}>
-            {/* Mobile Close Button for Right Pane */}
-            <div className="lg:hidden absolute top-4 right-4 z-50">
-              <button onClick={() => setIsRightPaneOpen(false)} className="p-2 bg-gray-100 dark:bg-neutral-800 rounded-full">
-                <PanelRightClose size={20} />
-              </button>
-            </div>
-
-            {activeIntegration === 'google-calendar' ? (
-              <div className="flex-1 flex flex-col overflow-hidden h-full">
-                <CalendarGrid
-                  date={selectedDate}
-                  events={calendarEvents.filter(e => (e.type || e.originalIntegration?.split('-')[0]) === 'google')}
-                  tasks={[]}
-                  searchQuery={searchQuery}
-                />
-              </div>
-            ) : activeIntegration === 'slack' ? (
-              <div className="flex-1 flex flex-col overflow-hidden p-6 bg-gray-50/30 dark:bg-neutral-900/30 h-full">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                    <SlackLogo size={20} />
-                    Slack
-                  </h2>
-                </div>
-                <div className="space-y-4 overflow-y-auto custom-scrollbar pr-2 flex-1">
-                  {slackMessages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
-                      <SlackLogo size={40} className="mb-4 grayscale" />
-                      <p className="text-sm font-bold uppercase tracking-widest">No starred messages</p>
-                    </div>
-                  ) : (
-                    slackMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className="group p-4 bg-white dark:bg-neutral-900 border border-gray-100 dark:border-neutral-800 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer relative"
-                        onClick={() => handleSmartAddTask({ title: msg.title, channel: 'slack' })}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest">{msg.notes}</span>
-                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
-                            {new Date(msg.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 line-clamp-3 leading-relaxed">
-                          {msg.title}
-                        </p>
-                        <div className="absolute inset-0 border-2 border-purple-500 opacity-0 group-hover:opacity-10 rounded-2xl transition-opacity" />
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : activeIntegration === 'notion' ? (
-              <div className="flex-1 flex flex-col overflow-hidden h-full">
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-neutral-800">
-                  <h2 className="text-lg font-black text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                    <NotionLogo size={20} />
-                    Notion
-                  </h2>
-                  <button onClick={() => router.push('/settings')} className="px-3 py-1 bg-gray-100 dark:bg-neutral-800 rounded-lg text-xs font-bold hover:bg-gray-200 dark:hover:bg-neutral-700 transition-colors">Settings</button>
-                </div>
-
-                {/* Database Browser */}
-                <div className="flex-1 overflow-hidden p-4">
-                  <NotionDatabaseBrowser
-                    onPageSelect={async (page, dbId) => {
-                      const task = await importNotionPage(page.id, dbId, selectedDate.toISOString().split('T')[0]);
-                      if (task) loadNotionTasks();
-                    }}
-                    onPageDragStart={(page, dbId) => {
-                      setActiveDragItem({ type: 'notion-page', page, databaseId: dbId } as any);
-                    }}
-                  />
-                </div>
-
-                {/* Synced Tasks Summary */}
-                <div className="border-t border-gray-100 dark:border-neutral-800 p-4 bg-gray-50/50 dark:bg-neutral-900/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Synced Tasks</span>
-                    <span className="text-[10px] font-bold text-purple-600">{Object.values(tasks).flat().filter(t => t.originalIntegration === 'notion').length}</span>
-                  </div>
-                  <div className="max-h-32 overflow-y-auto space-y-1 custom-scrollbar">
-                    {Object.values(tasks).flat().filter(t => t.originalIntegration === 'notion').slice(0, 5).map((t: Task) => (
-                      <div key={t.id} className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                        • {t.title}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : activeIntegration ? (
-              <div className="flex-1 flex flex-col overflow-hidden h-full">
-                <div className="p-4 border-b border-gray-100 dark:border-neutral-800">
-                  <h2 className="text-sm font-black capitalize flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-purple-500" />
-                    {activeIntegration.replace('-', ' ')}
-                  </h2>
-                </div>
-                <CalendarGrid
-                  date={selectedDate}
-                  events={calendarEvents.filter(e => (e.type || e.originalIntegration?.split('-')[0]) === activeIntegration?.split('-')[0])}
-                  tasks={(tasks[selectedDate.toISOString().split('T')[0]] || []).filter(t => t.originalIntegration === activeIntegration)}
-                  searchQuery={searchQuery}
-                />
-              </div>
-            ) : null}
-          </div>
+          <IntegrationSidebar
+            isOpen={isRightPaneOpen}
+            onToggle={() => setIsRightPaneOpen(!isRightPaneOpen)}
+            activeIntegration={activeIntegration}
+            onReferenceClick={(type) => handleIntegrationToggle(type)}
+            selectedDate={selectedDate}
+            calendarEvents={calendarEvents}
+            slackMessages={slackMessages}
+            tasks={tasks}
+            onLoadNotionTasks={loadNotionTasks}
+            onDragStart={setActiveDragItem}
+          />
 
           <DragOverlay>
             {activeDragItem ? (
@@ -692,6 +522,7 @@ function DashboardPage() {
         onUpdate={handleTaskUpdate}
         onDelete={handleTaskDelete}
         partners={partners}
+        userProfiles={profiles}
       />
 
       <CreateTaskModal

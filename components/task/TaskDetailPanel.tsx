@@ -34,6 +34,7 @@ interface TaskDetailPanelProps {
   onUpdate: (id: string, updates: Partial<Task>, dateStr?: string) => void;
   onDelete: (id: string, dateStr?: string) => void;
   partners?: PartnerRelationship[];
+  userProfiles?: Record<string, any>;
 }
 
 export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
@@ -42,14 +43,14 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   onClose,
   onUpdate,
   onDelete,
-  partners
+  partners,
+  userProfiles
 }) => {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [estimate, setEstimate] = useState<number | ''>('');
   const { user } = useAuth();
   const { showToast } = useToast();
-  const [partnerProfiles, setPartnerProfiles] = useState<Record<string, string>>({}); // uid -> displayName
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [shares, setShares] = useState<SharedUser[]>([]);
   const [reminderMessage, setReminderMessage] = useState('');
@@ -78,37 +79,6 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
     }
   }, [task]);
 
-  useEffect(() => {
-    const fetchPartnerProfiles = async () => {
-      if (!partners || partners.length === 0) return;
-      setLoadingPartners(true);
-      const profiles: Record<string, string> = {};
-
-      for (const p of partners) {
-        // Determine the *other* person's ID
-        const otherId = p.requesterId === user?.uid ? p.recipientId : p.requesterId;
-        if (profiles[otherId]) continue;
-
-        try {
-          const userDoc = await getDoc(doc(db, 'users', otherId));
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            profiles[otherId] = userData.displayName || userData.username || 'Unknown User';
-          } else {
-            profiles[otherId] = 'Unknown User';
-          }
-        } catch (e) {
-          console.error("Error fetching profile", e);
-        }
-      }
-      setPartnerProfiles(profiles);
-      setLoadingPartners(false);
-    };
-
-    if (partners && user) {
-      fetchPartnerProfiles();
-    }
-  }, [partners, user]);
 
   const fetchShares = async () => {
     if (!task) return;
@@ -411,11 +381,15 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                   <span className="block text-[11px] font-medium uppercase mb-0.5">Accountability Partner</span>
                   {task.accountabilityPartnerId ? (
                     <div className="flex items-center gap-2 bg-purple-50 dark:bg-purple-900/20 px-2 py-1.5 rounded-lg border border-purple-100 dark:border-purple-800">
-                      <div className="w-5 h-5 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-[10px] font-bold text-purple-700 dark:text-purple-300">
-                        <User size={12} />
+                      <div className="w-5 h-5 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-[10px] font-bold text-purple-700 dark:text-purple-300 overflow-hidden">
+                        {userProfiles?.[task.accountabilityPartnerId]?.photoURL ? (
+                          <img src={userProfiles[task.accountabilityPartnerId].photoURL} className="w-full h-full object-cover" />
+                        ) : (
+                          <User size={12} />
+                        )}
                       </div>
                       <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate flex-1">
-                        {task.accountabilityPartnerId}
+                        {userProfiles?.[task.accountabilityPartnerId]?.displayName || task.accountabilityPartnerId}
                       </span>
                       <button
                         onClick={() => handleUpdate({ accountabilityPartnerId: null })}
@@ -439,7 +413,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                         const otherId = p.requesterId === user?.uid ? p.recipientId : p.requesterId;
                         return (
                           <option key={p.id} value={otherId}>
-                            {partnerProfiles[otherId] || otherId}
+                            {userProfiles?.[otherId]?.displayName || otherId}
                           </option>
                         );
                       })}
@@ -543,12 +517,15 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                   <span className="block text-[11px] font-medium uppercase mb-0.5">Owner / Delegate</span>
                   {(task.ownerId && task.ownerId !== task.userId) || (task.ownerId && task.userId && task.ownerId !== task.userId) ? (
                     <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-2 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800">
-                      <div className="w-5 h-5 rounded-full bg-blue-200 dark:bg-blue-800 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300">
-                        <User size={12} />
+                      <div className="w-5 h-5 rounded-full bg-blue-200 dark:bg-blue-800 flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-300 overflow-hidden">
+                        {userProfiles?.[task.ownerId]?.photoURL ? (
+                          <img src={userProfiles[task.ownerId].photoURL} className="w-full h-full object-cover" />
+                        ) : (
+                          <User size={12} />
+                        )}
                       </div>
                       <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate flex-1">
-                        {/* TODO: Resolve Name */}
-                        {task.ownerId}
+                        {userProfiles?.[task.ownerId]?.displayName || task.ownerId}
                       </span>
                       <button
                         onClick={() => {
@@ -639,8 +616,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 <UserCircle size={16} className="text-purple-600 dark:text-purple-400" />
                 <div className="flex-1">
                   <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase block">Partnered with</span>
-                  <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
-                    {partnerProfiles[task.accountabilityPartnerId] || task.accountabilityPartnerId}
+                  <span className="text-xs font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                    {userProfiles?.[task.accountabilityPartnerId]?.photoURL && (
+                      <img src={userProfiles[task.accountabilityPartnerId].photoURL} className="w-4 h-4 rounded-full object-cover" />
+                    )}
+                    {userProfiles?.[task.accountabilityPartnerId]?.displayName || task.accountabilityPartnerId}
                   </span>
                 </div>
                 <span className="text-lg">🤝</span>

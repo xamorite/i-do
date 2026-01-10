@@ -193,8 +193,19 @@ export const DailyPlanningRitual: React.FC<DailyPlanningRitualProps> = ({
                                     </div>
 
                                     {availableTasks.length === 0 ? (
-                                        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 dark:border-gray-700">
-                                            No tasks in inbox or backlog. Add tasks from the dashboard!
+                                        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border-2 border-dashed border-gray-200 dark:border-gray-700">
+                                            <div className="w-16 h-16 mx-auto mb-4 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                                                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                                </svg>
+                                            </div>
+                                            <p className="text-gray-600 dark:text-gray-300 font-medium mb-2">Your inbox is empty!</p>
+                                            <p className="text-sm text-gray-400 mb-4">
+                                                Add tasks to your <span className="font-bold text-purple-600 dark:text-purple-400">Inbox</span> first, then schedule them here.
+                                            </p>
+                                            <p className="text-xs text-gray-400">
+                                                💡 Tip: Check the <span className="font-semibold">Inbox column</span> on your dashboard to add unplanned tasks
+                                            </p>
                                         </div>
                                     ) : (
                                         <div className="space-y-3">

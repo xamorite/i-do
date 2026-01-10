@@ -16,14 +16,18 @@ interface TaskCardProps {
   task: Task;
   onClick?: (task: Task) => void;
   onStatusToggle?: (task: Task) => void;
+  currentUserId?: string;
+  onAction?: (task: Task, action: string) => void;
+  userProfiles?: Record<string, any>;
 }
 
-export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onAction?: (task: Task, action: string) => void }> = ({
+export const TaskCard: React.FC<TaskCardProps> = ({
   task,
   onClick,
   onStatusToggle,
   currentUserId,
-  onAction
+  onAction,
+  userProfiles
 }) => {
   const isDone = task.status === 'done';
   const isAccountability = !!task.accountabilityPartnerId;
@@ -34,6 +38,10 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
   const hasBeenReminded = !!task.remindedAt;
   const isRemindedOverdue = isOverdue && hasBeenReminded && !isDone;
+
+  // Determine whose profile to show (the other person)
+  const otherUserId = isOwner ? task.accountabilityPartnerId : (isAP ? (task.ownerId || task.userId) : null);
+  const otherProfile = otherUserId && userProfiles ? userProfiles[otherUserId] : null;
 
   const getStatusIcon = () => {
     if (task.status === 'pending_acceptance') return <AlertCircle className="text-yellow-500" size={18} />;
@@ -85,10 +93,22 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
     <div
       onClick={() => onClick?.(task)}
       className={`group bg-white dark:bg-neutral-900 border-l-4 border-y border-r rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col gap-2 ${isRemindedOverdue
-        ? 'border-red-500 bg-red-50/50 dark:bg-red-900/10'
+        ? 'border-red-500 bg-red-50/50 dark:bg-red-900/10 shadow-red-100 dark:shadow-red-900/5 ring-1 ring-red-500 ring-opacity-50 animate-pulse-subtle'
         : `${categoryStyle.borderColor} border-gray-200 dark:border-neutral-800`
-        } ${isDone ? 'opacity-60 grayscale' : ''}`}
+        } ${isDone ? 'opacity-60 grayscale shadow-none' : ''}`}
     >
+      {/* Visual pulse for reminded overdue tasks */}
+      {isRemindedOverdue && (
+        <style jsx>{`
+          @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+          }
+          .animate-pulse-subtle {
+            animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+        `}</style>
+      )}
       <div className="flex items-start gap-3 w-full">
         <button
           onClick={handleMainAction}
@@ -151,8 +171,19 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
             </div>
           )}
           {isRemindedOverdue && (
-            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded-md" title="Reminder sent">
+            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded-md border border-red-200 dark:border-red-800" title="Reminder sent">
               <span>🔔 Reminded</span>
+            </div>
+          )}
+          {otherProfile && (
+            <div className="flex items-center -ml-1 h-5 w-5 rounded-full border-2 border-white dark:border-neutral-900 bg-gray-200 dark:bg-neutral-800 overflow-hidden" title={otherProfile.displayName}>
+              {otherProfile.photoURL ? (
+                <img src={otherProfile.photoURL} alt={otherProfile.displayName} className="h-full w-full object-cover shadow-sm" />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center text-[8px] font-bold text-gray-500">
+                  {otherProfile.displayName.charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -185,5 +216,4 @@ export const TaskCard: React.FC<TaskCardProps & { currentUserId?: string; onActi
   );
 };
 
-// Memoize to prevent re-rendering entire list when one task changes
 export default React.memo(TaskCard);

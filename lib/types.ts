@@ -7,6 +7,7 @@ export interface User {
   email: string | null;
   displayName: string | null;
   username?: string; // Unique username for @mentions
+  photoURL?: string;
   role: UserRole;
   createdAt?: Date;
 }
