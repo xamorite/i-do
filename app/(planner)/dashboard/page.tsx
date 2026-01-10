@@ -56,6 +56,7 @@ import { SlackLogo, NotionLogo } from '@/components/ui/Logos';
 import { useAuth } from '@/contexts/AuthContext';
 import { IntegrationRail } from '@/components/layout/IntegrationRail';
 import { DayColumn } from '@/components/task/DayColumn';
+import { useDialog } from '@/contexts/DialogContext';
 import { CalendarGrid } from '@/components/calendar/CalendarGrid';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { useRouter } from 'next/navigation';
@@ -84,6 +85,8 @@ function DashboardPage() {
     deleteTask: apiDeleteTask
   } = useTasksRealtime();
 
+  const { showConfirm, showAlert } = useDialog();
+
   // Real-time partners for accountability features
   const { partners } = usePartnersRealtime();
 
@@ -111,12 +114,70 @@ function DashboardPage() {
 
   // Compute grouped tasks from the real-time flat array
   const handleTaskUpdate = async (id: string, updates: Partial<Task>, dateStr?: string) => {
+    const existingTask = allTasks.find(t => t.id === id);
     try {
-      // Direct Firestore update - will be reflected via onSnapshot
       await apiUpdateTask(id, updates);
+
+      // --- Notification Logic ---
+      if (!existingTask) return;
+
+      // 1. Proposal of Task (Delegation)
+      if (updates.ownerId && updates.ownerId !== existingTask.ownerId) {
+        await createNotification({
+          recipientId: updates.ownerId,
+          type: 'task_assigned',
+          taskId: id,
+          taskTitle: updates.title || existingTask.title,
+          message: `${greetingName} assigned a task to you`
+        } as any);
+      }
+
+      // 2. Proposal of Accountability Partner
+      if (updates.accountabilityPartnerId && updates.accountabilityPartnerId !== existingTask.accountabilityPartnerId) {
+        await createNotification({
+          recipientId: updates.accountabilityPartnerId,
+          type: 'task_ap_assigned',
+          taskId: id,
+          taskTitle: updates.title || existingTask.title,
+          message: `${greetingName} proposed you as accountability partner`
+        } as any);
+      }
+
+      // 3. Update in partner's task
+      // If someone other than the owner/creator updates the task
+      const isOwner = user?.uid === (updates.ownerId || existingTask.ownerId);
+      const isAP = user?.uid === (updates.accountabilityPartnerId || existingTask.accountabilityPartnerId);
+
+      // Notify owner if someone else updates
+      if (!isOwner && (updates.ownerId || existingTask.ownerId)) {
+        // Avoid double notifying if we just assigned them
+        if (!updates.ownerId) {
+          await createNotification({
+            recipientId: updates.ownerId || existingTask.ownerId || undefined,
+            type: 'task_updated',
+            taskId: id,
+            taskTitle: updates.title || existingTask.title,
+            message: `${greetingName} updated a task you are working on`
+          } as any);
+        }
+      }
+
+      // Notify AP if someone else updates
+      if (!isAP && (updates.accountabilityPartnerId || existingTask.accountabilityPartnerId)) {
+        if (!updates.accountabilityPartnerId) {
+          await createNotification({
+            recipientId: updates.accountabilityPartnerId || existingTask.accountabilityPartnerId || undefined,
+            type: 'task_updated',
+            taskId: id,
+            taskTitle: updates.title || existingTask.title,
+            message: `${greetingName} updated a task you are partnering on`
+          } as any);
+        }
+      }
+
     } catch (err) {
       console.error('Failed to update task:', err);
-      alert('Failed to update task');
+      await showAlert('Error', 'Failed to update task');
     }
   };
 
@@ -141,8 +202,9 @@ function DashboardPage() {
 
       await apiCreateTask(taskData);
     } catch (err) {
+
       console.error('Failed to create task from drag:', err);
-      alert('Failed to create task');
+      await showAlert('Error', 'Failed to create task');
     }
   };
 
@@ -269,18 +331,25 @@ function DashboardPage() {
       await apiCreateTask(taskData);
       // No need to manually update state, the real-time listener will catch it!
     } catch (err) {
+
       console.error('Failed to create task:', err);
-      alert('Failed to create task');
+      await showAlert('Error', 'Failed to create task');
     }
   };
 
   const handleTaskDelete = async (id: string, dateStr?: string) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
+    const confirmed = await showConfirm(
+      'Delete Task',
+      'Are you sure you want to delete this task?',
+      { variant: 'destructive', confirmText: 'Delete' }
+    );
+    if (!confirmed) return;
+
     try {
       await apiDeleteTask(id);
     } catch (err) {
       console.error('Failed to delete task:', err);
-      alert('Failed to delete task');
+      await showAlert('Error', 'Failed to delete task');
     }
   };
 
@@ -312,7 +381,20 @@ function DashboardPage() {
   /* Notification Helper */
   const createNotification = async (notification: {
     recipientId: string | undefined;
-    type: 'task_assigned' | 'task_accepted' | 'task_rejected' | 'task_submitted' | 'task_approved' | 'task_changes_requested';
+    type:
+    | 'task_assigned'
+    | 'task_accepted'
+    | 'task_rejected'
+    | 'task_submitted'
+    | 'task_approved'
+    | 'task_changes_requested'
+    | 'task_reminder'
+    | 'task_updated'
+    | 'task_ap_assigned'
+    | 'task_ap_accepted'
+    | 'partner_request'
+    | 'partner_accepted'
+    | 'partner_declined';
     taskId: string;
     taskTitle: string;
     message?: string;
@@ -372,6 +454,18 @@ function DashboardPage() {
         taskTitle: task.title,
         message: `Task approved by ${greetingName}`
       });
+    } else if (action === 'accept_ap') {
+      await handleTaskUpdate(task.id, { status: 'planned' }, dStr);
+      await createNotification({
+        recipientId: task.userId || task.createdBy,
+        type: 'task_ap_accepted',
+        taskId: task.id,
+        taskTitle: task.title,
+        message: `${greetingName} accepted to be your accountability partner`
+      } as any);
+    } else if (action === 'reject_ap') {
+      await handleTaskUpdate(task.id, { status: 'planned', accountabilityPartnerId: null }, dStr);
+      // Optional: notify about rejection
     }
   };
 

@@ -40,11 +40,22 @@
 - **Issue**: Some API routes lacked proper error handling and validation
 - **Fix**: Improved error handling in `/api/tasks` route with proper status codes and validation
 
-### 6. **Environment Variables Documentation**
+- **Fix**: Created `ENV_SETUP.md` with complete list of required variables
+
+### 7. **Custom Dialog System**
 
 - **Status**: ✅ FIXED
-- **Issue**: No documentation for required environment variables
-- **Fix**: Created `ENV_SETUP.md` with complete list of required variables
+- **Issue**: Standard browser `alert()` and `confirm()` were used, which are non-visual and blocking
+- **Fix**: Implemented a global `DialogProvider` and `useDialog` hook with a production-standard UI
+
+### 8. **Real-time Accountability Notifications**
+
+- **Status**: ✅ FIXED
+- **Issue**: Partnership and task assignment actions lacked proper user feedback
+- **Fix**: Implemented 5 key notification flows:
+  - Partnership Request & Acceptance
+  - Task AP Proposal & Acceptance
+  - Shared task update notifications
 
 ## ⚠️ Issues Requiring Manual Action
 

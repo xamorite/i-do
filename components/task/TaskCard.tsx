@@ -196,16 +196,24 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       </div>
 
       {/* Explicit Action Buttons for specific states */}
-      {task.status === 'pending_acceptance' && (
+      {task.status === 'pending_acceptance' && (currentUserId === task.ownerId || currentUserId === task.accountabilityPartnerId) && (
         <div className="flex gap-2 mt-2">
           <button
-            onClick={(e) => { e.stopPropagation(); onAction?.(task, 'accept'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (currentUserId === task.ownerId) onAction?.(task, 'accept');
+              else onAction?.(task, 'accept_ap');
+            }}
             className="flex-1 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-lg hover:bg-green-100"
           >
             Accept
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); onAction?.(task, 'reject'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (currentUserId === task.ownerId) onAction?.(task, 'reject');
+              else onAction?.(task, 'reject_ap');
+            }}
             className="flex-1 py-1 bg-red-50 text-red-700 text-xs font-bold rounded-lg hover:bg-red-100"
           >
             Reject

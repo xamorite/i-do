@@ -56,7 +56,7 @@ export const UserAutocomplete: React.FC<UserAutocompleteProps> = ({ onSelect, pl
 
     return (
         <div className="relative" ref={wrapperRef}>
-            <div className="flex items-center border-b border-gray-200 dark:border-neutral-800 focus-within:border-purple-500 transition-colors">
+            <div className="flex items-center border-b border-gray-200 dark:border-neutral-800 transition-colors">
                 <Search size={14} className="text-gray-400 mr-2" />
                 <input
                     type="text"
@@ -66,7 +66,7 @@ export const UserAutocomplete: React.FC<UserAutocompleteProps> = ({ onSelect, pl
                         setIsOpen(true);
                     }}
                     onFocus={() => setIsOpen(true)}
-                    className="w-full bg-transparent border-none focus:ring-0 p-1 text-xs text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
+                    className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-1 text-xs text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
                     placeholder={placeholder}
                 />
                 {loading && <Loader2 size={14} className="animate-spin text-purple-500" />}

@@ -5,6 +5,7 @@ import { listIntegrations, startGoogleAuth, startNotionAuth, startSlackAuth, del
 import { useAuth } from '@/contexts/AuthContext';
 import { linkWithGoogleAccount } from '@/lib/auth';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { useDialog } from '@/contexts/DialogContext';
 import {
     Settings,
     Palette,
@@ -67,6 +68,7 @@ export default function SettingsPage() {
     const [connectingId, setConnectingId] = useState<string | null>(null);
     const [linkingProfile, setLinkingProfile] = useState(false);
     const { user, username, loading: authLoading } = useAuth();
+    const { showConfirm, showAlert } = useDialog();
     const router = useRouter();
 
     async function load() {
@@ -95,7 +97,7 @@ export default function SettingsPage() {
                 const data = await startGoogleAuth();
                 const popup = window.open(data.url, 'connect_google', 'width=600,height=700');
                 if (!popup) {
-                    alert('Popup blocked. Please allow popups.');
+                    await showAlert('Popup Blocked', 'Please allow popups to connect Google Calendar.');
                     setConnectingId(null);
                     return;
                 }
@@ -156,14 +158,20 @@ export default function SettingsPage() {
                 setConnectingId(null);
             }
         } else {
-            alert(`${app.name} integration is coming soon!`);
+            await showAlert('Coming Soon', `${app.name} integration is coming soon!`);
         }
     }
 
     async function handleDisconnect(app: any) {
         const integration = integrations.find(i => i.service === app.service);
         if (!integration) return;
-        if (!confirm(`Are you sure you want to disconnect ${app.name}?`)) return;
+
+        const confirmed = await showConfirm(
+            'Disconnect Integration',
+            `Are you sure you want to disconnect ${app.name}? This will stop syncing logic.`,
+            { variant: 'destructive', confirmText: 'Disconnect' }
+        );
+        if (!confirmed) return;
 
         setConnectingId(app.id);
         try {
@@ -171,7 +179,7 @@ export default function SettingsPage() {
             await load();
         } catch (err) {
             console.error(err);
-            alert('Failed to disconnect');
+            await showAlert('Error', 'Failed to disconnect integration');
         } finally {
             setConnectingId(null);
         }
@@ -183,7 +191,7 @@ export default function SettingsPage() {
             await linkWithGoogleAccount();
         } catch (err: any) {
             console.error(err);
-            alert(err.message || 'Failed to link Google account');
+            await showAlert('Link Failed', err.message || 'Failed to link Google account');
         } finally {
             setLinkingProfile(false);
         }

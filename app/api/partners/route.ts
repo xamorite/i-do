@@ -105,7 +105,16 @@ export async function POST(request: Request) {
 
         const ref = await adminDb.collection('partners').add(newRel);
 
-        // Notify recipient? (Future feature)
+        // Notify recipient
+        await adminDb.collection('notifications').add({
+            recipientId: targetUserId,
+            type: 'partner_request',
+            senderId: uid,
+            message: 'sent you a partnership request',
+            read: false,
+            createdAt: new Date().toISOString(),
+            PartnerRequestId: ref.id
+        });
 
         return NextResponse.json({ id: ref.id, ...newRel });
 
@@ -146,10 +155,26 @@ export async function PATCH(request: Request) {
 
         // If blocking, prevent loop? Logic simplistic for now.
 
-        await ref.update({
+        const updatePromise = ref.update({
             status,
             updatedAt: new Date().toISOString()
         });
+
+        // Notifications
+        if (status === 'active' || status === 'declined') {
+            const notifData = {
+                recipientId: data.requesterId, // Notify the person who ASKED
+                type: status === 'active' ? 'partner_accepted' : 'partner_declined',
+                senderId: uid,
+                message: status === 'active' ? 'accepted your partnership request' : 'declined your partnership request',
+                read: false,
+                createdAt: new Date().toISOString(),
+                PartnerRequestId: id
+            };
+            await Promise.all([updatePromise, adminDb.collection('notifications').add(notifData)]);
+        } else {
+            await updatePromise;
+        }
 
         return NextResponse.json({ success: true });
 

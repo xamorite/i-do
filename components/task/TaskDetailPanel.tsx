@@ -23,6 +23,7 @@ import { UserAutocomplete } from '@/components/partners/UserAutocomplete';
 import { getIdTokenHeader } from '@/lib/getIdToken';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useDialog } from '@/contexts/DialogContext';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { getCategoryStyles } from '@/lib/constants';
@@ -51,6 +52,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   const [estimate, setEstimate] = useState<number | ''>('');
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { showConfirm, showAlert } = useDialog();
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [shares, setShares] = useState<SharedUser[]>([]);
   const [reminderMessage, setReminderMessage] = useState('');
@@ -62,6 +64,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
   const [endTime, setEndTime] = useState('');
   const [recurrence, setRecurrence] = useState('');
   const [channel, setChannel] = useState('');
+  const [accountabilityPartnerId, setAccountabilityPartnerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (task) {
@@ -74,6 +77,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
       setEndTime(task.endTime || '');
       setRecurrence(task.recurrencePattern || '');
       setChannel(task.channel || '');
+      setAccountabilityPartnerId(task.accountabilityPartnerId || null);
       setReminderMessage(''); // Reset message when task changes
       fetchShares();
     }
@@ -103,7 +107,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
       });
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || 'Failed to share');
+        await showAlert('Share Failed', err.error || 'Failed to share', { variant: 'destructive' });
         return;
       }
       fetchShares();
@@ -114,7 +118,12 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
 
   const handleUnshare = async (userId: string) => {
     if (!task) return;
-    if (!confirm('Remove access?')) return;
+    const confirmed = await showConfirm(
+      'Remove Access?',
+      'Are you sure you want to remove this user from the task?',
+      { variant: 'destructive', confirmText: 'Remove' }
+    );
+    if (!confirmed) return;
     try {
       const headers = await getIdTokenHeader() as HeadersInit;
       await fetch(`/api/tasks/${task.id}/share?partnerUserId=${userId}`, {
@@ -194,8 +203,13 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  if (confirm('Are you sure you want to delete this task?')) {
+                onClick={async () => {
+                  const confirmed = await showConfirm(
+                    'Delete Task',
+                    'Are you sure you want to delete this task? This action cannot be undone.',
+                    { variant: 'destructive', confirmText: 'Delete' }
+                  );
+                  if (confirmed) {
                     onDelete(task.id, task.plannedDate || '');
                     onClose();
                   }
@@ -222,7 +236,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onBlur={() => handleUpdate({ title })}
-                className="w-full text-xl font-bold bg-transparent border-none focus:ring-0 text-gray-900 dark:text-white placeholder:text-gray-300 p-0"
+                className="w-full text-xl font-bold bg-transparent border-none focus:ring-0 outline-none focus:outline-none text-gray-900 dark:text-white placeholder:text-gray-300 p-0"
                 placeholder="Task title"
               />
             </div>
@@ -241,7 +255,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       setPriority(p);
                       handleUpdate({ priority: p });
                     }}
-                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium text-gray-900 dark:text-gray-100 uppercase"
+                    className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-0 text-sm font-medium text-gray-900 dark:text-gray-100 uppercase"
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -261,7 +275,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       type="date"
                       value={task.plannedDate || ''}
                       onChange={(e) => handleUpdate({ plannedDate: e.target.value })}
-                      className="bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 flex-1 min-w-[120px]"
+                      className="bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-0 text-gray-900 dark:text-gray-100 flex-1 min-w-[120px]"
                     />
                     <input
                       type="time"
@@ -270,7 +284,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                         setStartTime(e.target.value);
                         handleUpdate({ startTime: e.target.value });
                       }}
-                      className="bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 w-24"
+                      className="bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-0 text-gray-900 dark:text-gray-100 w-24"
                     />
                     <span className="self-center">-</span>
                     <input
@@ -280,7 +294,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                         setEndTime(e.target.value);
                         handleUpdate({ endTime: e.target.value });
                       }}
-                      className="bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 w-24"
+                      className="bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-0 text-gray-900 dark:text-gray-100 w-24"
                     />
                   </div>
                 </div>
@@ -298,7 +312,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       setDueDate(e.target.value);
                       handleUpdate({ dueDate: e.target.value });
                     }}
-                    className="bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 w-full"
+                    className="bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-0 text-gray-900 dark:text-gray-100 w-full"
                   />
                 </div>
               </div>
@@ -317,7 +331,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                         recurrencePattern: e.target.value
                       });
                     }}
-                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium text-gray-900 dark:text-gray-100"
+                    className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-0 text-sm font-medium text-gray-900 dark:text-gray-100"
                   >
                     <option value="">None</option>
                     <option value="daily">Daily</option>
@@ -339,7 +353,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       value={estimate}
                       onChange={(e) => setEstimate(e.target.value ? parseInt(e.target.value) : '')}
                       onBlur={() => handleUpdate({ estimateMinutes: estimate === '' ? null : estimate })}
-                      className="bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-gray-100 w-16"
+                      className="bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-0 text-gray-900 dark:text-gray-100 w-16"
                       placeholder="--"
                     />
                     <span>minutes</span>
@@ -358,7 +372,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       setChannel(e.target.value);
                       handleUpdate({ channel: e.target.value });
                     }}
-                    className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium text-gray-900 dark:text-gray-100"
+                    className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none p-0 text-sm font-medium text-gray-900 dark:text-gray-100"
                   >
                     <option value="">No Category</option>
                     <option value="work">Work</option>
@@ -379,20 +393,23 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 <div className="w-[18px] flex justify-center"><Tag size={16} /></div>
                 <div className="flex-1">
                   <span className="block text-[11px] font-medium uppercase mb-0.5">Accountability Partner</span>
-                  {task.accountabilityPartnerId ? (
+                  {accountabilityPartnerId ? (
                     <div className="flex items-center gap-2 bg-purple-50 dark:bg-purple-900/20 px-2 py-1.5 rounded-lg border border-purple-100 dark:border-purple-800">
                       <div className="w-5 h-5 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-[10px] font-bold text-purple-700 dark:text-purple-300 overflow-hidden">
-                        {userProfiles?.[task.accountabilityPartnerId]?.photoURL ? (
-                          <img src={userProfiles[task.accountabilityPartnerId].photoURL} className="w-full h-full object-cover" />
+                        {userProfiles?.[accountabilityPartnerId]?.photoURL ? (
+                          <img src={userProfiles[accountabilityPartnerId].photoURL} className="w-full h-full object-cover" />
                         ) : (
                           <User size={12} />
                         )}
                       </div>
                       <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate flex-1">
-                        {userProfiles?.[task.accountabilityPartnerId]?.displayName || task.accountabilityPartnerId}
+                        {userProfiles?.[accountabilityPartnerId]?.displayName || accountabilityPartnerId}
                       </span>
                       <button
-                        onClick={() => handleUpdate({ accountabilityPartnerId: null })}
+                        onClick={() => {
+                          setAccountabilityPartnerId(null);
+                          handleUpdate({ accountabilityPartnerId: null, status: 'planned' });
+                        }}
                         className="text-gray-400 hover:text-red-500 transition-colors"
                       >
                         <X size={14} />
@@ -400,10 +417,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                     </div>
                   ) : (
                     <select
-                      className="w-full bg-transparent border border-gray-200 dark:border-gray-700 rounded-md p-1.5 text-sm"
+                      className="w-full bg-transparent border border-gray-200 dark:border-gray-700 rounded-md p-1.5 text-sm focus:ring-0 outline-none focus:outline-none"
                       onChange={(e) => {
                         if (e.target.value) {
-                          handleUpdate({ accountabilityPartnerId: e.target.value });
+                          setAccountabilityPartnerId(e.target.value);
+                          handleUpdate({ accountabilityPartnerId: e.target.value, status: 'pending_acceptance' });
                         }
                       }}
                       value=""
@@ -423,7 +441,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                     </select>
                   )}
                   {/* Status Actions for Accountability */}
-                  {task.accountabilityPartnerId && (
+                  {accountabilityPartnerId && (
                     <div className="mt-2 text-xs">
                       {/* Owner View */}
                       {user?.uid === task.ownerId && task.status === 'planned' && (
@@ -441,7 +459,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                       )}
 
                       {/* Partner View */}
-                      {user?.uid === task.accountabilityPartnerId && task.status === 'awaiting_approval' && (
+                      {user?.uid === accountabilityPartnerId && task.status === 'awaiting_approval' && (
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleUpdate({ status: 'done' })}
@@ -575,7 +593,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                     <div className="flex flex-wrap gap-2 mb-2">
                       {shares.map((u, i) => (
                         <div key={i} className="flex items-center gap-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full text-xs">
-                          <span className="max-w-[100px] truncate">{u.userId}</span>
+                          <span className="max-w-[100px] truncate">
+                            {userProfiles?.[u.userId]?.displayName || u.userId}
+                          </span>
                           <span className="opacity-50 text-[10px]">({u.role})</span>
                           <button onClick={() => handleUnshare(u.userId)}>
                             <X size={12} />
@@ -602,7 +622,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 onBlur={() => handleUpdate({ notes })}
-                className="w-full h-48 bg-transparent border-none focus:ring-0 text-gray-700 dark:text-gray-300 placeholder:text-gray-400 p-0 resize-none leading-relaxed"
+                className="w-full h-48 bg-transparent border-none focus:ring-0 outline-none focus:outline-none text-gray-700 dark:text-gray-300 placeholder:text-gray-400 p-0 resize-none leading-relaxed"
                 placeholder="Add notes, checklists, or context..."
               />
             </div>
@@ -611,16 +631,16 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({
           {/* Footer */}
           <div className="p-4 border-t border-gray-100 dark:border-neutral-800">
             {/* Partner Profile Display */}
-            {task.accountabilityPartnerId && (
+            {accountabilityPartnerId && (
               <div className="flex items-center gap-2 mb-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                 <UserCircle size={16} className="text-purple-600 dark:text-purple-400" />
                 <div className="flex-1">
                   <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase block">Partnered with</span>
                   <span className="text-xs font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-2">
-                    {userProfiles?.[task.accountabilityPartnerId]?.photoURL && (
-                      <img src={userProfiles[task.accountabilityPartnerId].photoURL} className="w-4 h-4 rounded-full object-cover" />
+                    {userProfiles?.[accountabilityPartnerId]?.photoURL && (
+                      <img src={userProfiles[accountabilityPartnerId].photoURL} className="w-4 h-4 rounded-full object-cover" />
                     )}
-                    {userProfiles?.[task.accountabilityPartnerId]?.displayName || task.accountabilityPartnerId}
+                    {userProfiles?.[accountabilityPartnerId]?.displayName || accountabilityPartnerId}
                   </span>
                 </div>
                 <span className="text-lg">🤝</span>

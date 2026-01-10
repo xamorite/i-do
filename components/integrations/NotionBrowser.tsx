@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { fetchNotionDatabases, fetchNotionPages, importNotionPage, saveNotionConfig } from '@/hooks/useNotion';
 import { useDraggable } from '@dnd-kit/core';
+import { useDialog } from '@/contexts/DialogContext';
 
 const DraggablePage: React.FC<{ page: any, databaseId?: string }> = ({ page, databaseId }) => {
+    const { showAlert } = useDialog();
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: `notion-page-${page.id}`,
         data: { type: 'NotionPage', page, databaseId },
@@ -37,7 +39,7 @@ const DraggablePage: React.FC<{ page: any, databaseId?: string }> = ({ page, dat
             <div className="flex gap-2">
                 <button onClick={async () => {
                     const task = await importNotionPage(page.id, databaseId);
-                    if (task) alert('Imported: ' + task.title);
+                    if (task) await showAlert('Import Successful', 'Imported: ' + task.title, { variant: 'success' });
                 }} className="px-3 py-1 bg-purple-600 text-white rounded">Import</button>
             </div>
         </li>
@@ -53,6 +55,7 @@ export const NotionBrowser: React.FC = () => {
     const [hasMore, setHasMore] = useState(false);
     const [mappings, setMappings] = useState<any>({ title: null, date: null, status: null, priority: null });
     const [saveLoading, setSaveLoading] = useState(false);
+    const { showAlert } = useDialog();
 
     useEffect(() => {
         (async () => {
@@ -99,14 +102,17 @@ export const NotionBrowser: React.FC = () => {
     }
 
     async function handleSaveConfig() {
-        if (!selectedDb) return alert('Select a database');
+        if (!selectedDb) {
+            await showAlert('Missing Selection', 'Select a database first');
+            return;
+        }
         setSaveLoading(true);
         try {
             await saveNotionConfig(selectedDb, mappings);
-            alert('Notion config saved');
+            await showAlert('Success', 'Notion config saved', { variant: 'success' });
         } catch (err) {
             console.error(err);
-            alert('Failed to save config');
+            await showAlert('Error', 'Failed to save config');
         } finally {
             setSaveLoading(false);
         }

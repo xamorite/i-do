@@ -70,6 +70,12 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ onSelect
             case 'task_approved': return 'Approved your work';
             case 'task_changes_requested': return 'Requested changes';
             case 'task_reminder': return 'Sent you a reminder';
+            case 'task_updated': return 'Updated a shared task';
+            case 'task_ap_assigned': return 'Proposed you as accountability partner';
+            case 'task_ap_accepted': return 'Accepted accountability partnership';
+            case 'partner_request': return 'Sent you a partnership request';
+            case 'partner_accepted': return 'Accepted your partnership';
+            case 'partner_declined': return 'Declined your partnership';
             default: return 'New notification';
         }
     };

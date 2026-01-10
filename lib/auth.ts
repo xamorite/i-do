@@ -73,6 +73,7 @@ export const signIn = async (email: string, password: string): Promise<void> => 
 };
 
 // Sign in with Google (Redirect Mode to avoid COOP blocks)
+// Sign in with Google (Popup Mode for better UX/Reliability)
 export const signInWithGoogle = async (): Promise<void> => {
   try {
     const provider = new GoogleAuthProvider();
@@ -82,9 +83,41 @@ export const signInWithGoogle = async (): Promise<void> => {
       access_type: 'offline',
       prompt: 'consent',
     });
-    // Using redirect instead of popup to avoid Cross-Origin-Opener-Policy issues
-    await signInWithRedirect(auth, provider);
+
+    // Use popup for immediate feedback and better reliability on localhost
+    const result = await signInWithPopup(auth, provider);
+
+    // Determine if user is new or existing to sync properly
+    await syncUserAccount(result.user);
+
+    // Auto-integrate Google Calendar if credential exists
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    // Try to extract refresh token from internal properties if available
+    const tokenResponse = (result as any)._tokenResponse;
+
+    if (credential) {
+      try {
+        const token = await result.user.getIdToken();
+        await fetch('/api/integrations/google/auto', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            credential,
+            refreshToken: tokenResponse?.refreshToken
+          })
+        });
+      } catch (err) {
+        console.error('Failed to auto-integrate Google Calendar:', err);
+      }
+    }
+
   } catch (error: any) {
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error('Sign in check was cancelled.');
+    }
     throw new Error(getAuthErrorMessage(error));
   }
 };

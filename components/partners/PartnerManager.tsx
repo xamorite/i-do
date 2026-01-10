@@ -3,6 +3,7 @@ import { X, UserPlus, Check, Ban, Clock, Loader2, ShieldCheck, User } from 'luci
 import { PartnerRelationship } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { getIdTokenHeader } from '@/lib/getIdToken';
+import { useUserProfiles } from '@/hooks/useUserProfiles';
 
 interface PartnerManagerProps {
     isOpen: boolean;
@@ -17,6 +18,7 @@ export const PartnerManager: React.FC<PartnerManagerProps> = ({ isOpen, onClose 
     const [inviteLoading, setInviteLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Fetch partners
     const fetchPartners = async () => {
         if (!user) return;
         setLoading(true);
@@ -35,6 +37,18 @@ export const PartnerManager: React.FC<PartnerManagerProps> = ({ isOpen, onClose 
     useEffect(() => {
         if (isOpen) fetchPartners();
     }, [isOpen, user]);
+
+    // Gather all UIDs to fetch profiles
+    const allUids = React.useMemo(() => {
+        const uids = new Set<string>();
+        partners.forEach(p => {
+            uids.add(p.requesterId);
+            uids.add(p.recipientId);
+        });
+        return Array.from(uids);
+    }, [partners]);
+
+    const { profiles } = useUserProfiles(allUids);
 
     const sendInvite = async () => {
         if (!inviteEmail) return;
@@ -119,21 +133,29 @@ export const PartnerManager: React.FC<PartnerManagerProps> = ({ isOpen, onClose 
                             <div>
                                 <h3 className="text-sm font-semibold mb-3 text-gray-500 uppercase tracking-wider">Requests</h3>
                                 <div className="space-y-2">
-                                    {partners.filter(p => p.status === 'pending' && p.recipientId === user?.uid).map(p => (
-                                        <div key={p.id} className="flex justify-between items-center p-3 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-900/20">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-bold">?</div>
-                                                <div className="text-sm">
-                                                    <span className="font-bold">Requester ID: </span>
-                                                    <span className="font-mono text-xs">{p.requesterId.slice(0, 8)}...</span>
+                                    {partners.filter(p => p.status === 'pending' && p.recipientId === user?.uid).map(p => {
+                                        const profile = profiles[p.requesterId];
+                                        return (
+                                            <div key={p.id} className="flex justify-between items-center p-3 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-900/20">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-bold overflow-hidden">
+                                                        {profile?.photoURL ? <img src={profile.photoURL} alt={profile.displayName} /> : '?'}
+                                                    </div>
+                                                    <div className="text-sm">
+                                                        <span className="font-bold">Request from: </span>
+                                                        <span className="font-medium text-purple-700 dark:text-purple-400">
+                                                            {profile?.displayName || p.requesterId.slice(0, 8) + '...'}
+                                                        </span>
+                                                        {profile?.username && <div className="text-xs text-gray-500">@{profile.username}</div>}
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => updateStatus(p.id, 'active')} className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"><Check size={16} /></button>
+                                                    <button onClick={() => updateStatus(p.id, 'declined')} className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"><X size={16} /></button>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => updateStatus(p.id, 'active')} className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"><Check size={16} /></button>
-                                                <button onClick={() => updateStatus(p.id, 'declined')} className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"><X size={16} /></button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -147,15 +169,20 @@ export const PartnerManager: React.FC<PartnerManagerProps> = ({ isOpen, onClose 
                                 <div className="space-y-2">
                                     {partners.filter(p => p.status === 'active').map(p => {
                                         const otherId = p.requesterId === user?.uid ? p.recipientId : p.requesterId;
+                                        const profile = profiles[otherId];
                                         return (
                                             <div key={p.id} className="flex justify-between items-center p-3 bg-white dark:bg-neutral-800 rounded-xl border border-gray-100 dark:border-neutral-700">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 font-bold">
-                                                        <User size={16} />
+                                                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 font-bold overflow-hidden">
+                                                        {profile?.photoURL ? <img src={profile.photoURL} alt={profile.displayName} /> : <User size={16} />}
                                                     </div>
                                                     <div className="text-sm">
-                                                        <span className="font-bold">Partner</span>
-                                                        <div className="font-mono text-xs text-gray-500">{otherId}</div>
+                                                        <div className="font-bold text-gray-900 dark:text-gray-100">
+                                                            {profile?.displayName || 'Partner'}
+                                                        </div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {profile?.username ? `@${profile.username}` : otherId.slice(0, 8) + '...'}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <button onClick={() => updateStatus(p.id, 'blocked')} className="text-xs text-red-400 hover:text-red-500">Block</button>
@@ -171,12 +198,20 @@ export const PartnerManager: React.FC<PartnerManagerProps> = ({ isOpen, onClose 
                             <div className="mt-6">
                                 <h3 className="text-sm font-semibold mb-3 text-gray-500 uppercase tracking-wider">Sent Requests</h3>
                                 <div className="space-y-2">
-                                    {partners.filter(p => p.status === 'pending' && p.requesterId === user?.uid).map(p => (
-                                        <div key={p.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded-xl border border-gray-100 dark:border-neutral-700 opacity-70">
-                                            <span className="text-sm">To: <span className="font-mono text-xs">{p.recipientId.slice(0, 8)}...</span></span>
-                                            <span className="text-xs flex items-center gap-1 text-gray-400"><Clock size={12} /> Pending</span>
-                                        </div>
-                                    ))}
+                                    {partners.filter(p => p.status === 'pending' && p.requesterId === user?.uid).map(p => {
+                                        const profile = profiles[p.recipientId];
+                                        return (
+                                            <div key={p.id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded-xl border border-gray-100 dark:border-neutral-700 opacity-70">
+                                                <div className="text-sm">
+                                                    <span className="text-gray-500">To: </span>
+                                                    <span className="font-medium">
+                                                        {profile?.displayName || p.recipientId.slice(0, 8) + '...'}
+                                                    </span>
+                                                </div>
+                                                <span className="text-xs flex items-center gap-1 text-gray-400"><Clock size={12} /> Pending</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}

@@ -131,7 +131,29 @@ export interface Notification {
   id: string;
   recipientId: string;
   senderId: string;
-  type: 'task_assigned' | 'task_accepted' | 'task_rejected' | 'task_submitted' | 'task_approved' | 'task_changes_requested' | 'task_reminder';
+  type:
+  | 'task_assigned'
+  | 'task_accepted'
+  | 'task_rejected'
+  | 'task_submitted'
+  | 'task_approved'
+  | 'task_changes_requested'
+  | 'task_reminder'
+  | 'task_updated'
+  | 'task_ap_assigned'
+  | 'task_ap_accepted'
+  | 'partner_request'
+  | 'partner_accepted'
+  | 'partner_declined'
+  | 'task_comment'
+  | 'task_delegated'
+  | 'task_delegation_accepted'
+  | 'task_delegation_rejected'
+  | 'task_ap_rejected'
+  | 'task_ap_removed'
+  | 'partner_removed'
+  | 'partner_blocked'
+  | 'system_message';
   taskId: string;
   taskTitle: string;
   message?: string; // Optional custom message (used for reminders)
